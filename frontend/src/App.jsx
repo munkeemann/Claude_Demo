@@ -1,12 +1,23 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { api } from "./api.js";
-import { LANES, REJECTED, nodeRegistry } from "./categories.js";
+import {
+  GIGANTIC_LANE,
+  GIGANTIC_TICKET,
+  GIGANTIC_TOGGLE,
+  LANES,
+  REJECTED,
+  nodeRegistry,
+} from "./categories.js";
+import Comparison from "./components/Comparison.jsx";
 import ConsumerLane from "./components/ConsumerLane.jsx";
 import FlightLayer from "./components/FlightLayer.jsx";
 import PackageBuilder, { randomPackage } from "./components/PackageBuilder.jsx";
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const BASE_INTERVAL_MS = 230; // per-package pacing at 1× (≈23s for the full dataset)
+
+const EMPTY_COUNTS = { small: 0, medium: 0, large: 0, gigantic: 0, rejected: 0 };
+const EMPTY_LOGS = { small: [], medium: [], large: [], gigantic: [], rejected: [] };
 
 const CHAOS_PRESETS = [
   { label: "Missing dims", pkg: { trackingNumber: "CHAOS-MISSING", weightLbs: 5 } },
@@ -19,8 +30,8 @@ const CHAOS_PRESETS = [
 let chipId = 0;
 
 export default function App() {
-  const [counts, setCounts] = useState({ small: 0, medium: 0, large: 0, rejected: 0 });
-  const [logs, setLogs] = useState({ small: [], medium: [], large: [], rejected: [] });
+  const [counts, setCounts] = useState(EMPTY_COUNTS);
+  const [logs, setLogs] = useState(EMPTY_LOGS);
   const [landed, setLanded] = useState({}); // laneKey -> timestamp (glow trigger)
   const [flights, setFlights] = useState([]);
   const [queueRemaining, setQueueRemaining] = useState(null);
@@ -29,6 +40,8 @@ export default function App() {
   const [running, setRunning] = useState(false);
   const [speed, setSpeed] = useState(1);
   const [builderOpen, setBuilderOpen] = useState(false);
+  const [compareOpen, setCompareOpen] = useState(false);
+  const [giganticOn, setGiganticOn] = useState(false);
   const [toasts, setToasts] = useState([]);
   const speedRef = useRef(1);
   const stopRef = useRef(false);
@@ -36,6 +49,14 @@ export default function App() {
   useEffect(() => {
     speedRef.current = speed;
   }, [speed]);
+
+  // pick up the toggle's server-side value on load
+  useEffect(() => {
+    api
+      .getConfig()
+      .then((c) => setGiganticOn(!!c.toggles[GIGANTIC_TOGGLE]))
+      .catch(() => {});
+  }, []);
 
   const toast = useCallback((msg, err = false) => {
     const id = ++chipId;
@@ -50,15 +71,32 @@ export default function App() {
       small: state.consumers.small?.packages ?? [],
       medium: state.consumers.medium?.packages ?? [],
       large: state.consumers.large?.packages ?? [],
+      gigantic: state.consumers.gigantic?.packages ?? [],
       rejected: state.rejected.packages,
     });
     setCounts({
       small: state.consumers.small?.count ?? 0,
       medium: state.consumers.medium?.count ?? 0,
       large: state.consumers.large?.count ?? 0,
+      gigantic: state.consumers.gigantic?.count ?? 0,
       rejected: state.rejected.count,
     });
   }, []);
+
+  /** KAN-20: flip the Gigantic toggle at runtime — no restart. */
+  const flipGigantic = useCallback(async () => {
+    try {
+      const res = await api.setToggle(GIGANTIC_TOGGLE, !giganticOn);
+      setGiganticOn(res.value);
+      toast(
+        res.value
+          ? `Gigantic category ON — volume ≥ 20,000 in³ now routes to its own lane (${GIGANTIC_TICKET})`
+          : "Gigantic category OFF — baseline routing restored"
+      );
+    } catch (e) {
+      toast(`Could not flip toggle: ${e.message}`, true);
+    }
+  }, [giganticOn, toast]);
 
   /** Send one package, animate its chip, and update counts when it lands. */
   const sendPackage = useCallback(
@@ -72,7 +110,12 @@ export default function App() {
         return null;
       }
       const laneKey = result.status === "routed" ? result.category : "rejected";
-      const lane = laneKey === "rejected" ? REJECTED : LANES.find((l) => l.key === laneKey);
+      const lane =
+        laneKey === "rejected"
+          ? REJECTED
+          : laneKey === "gigantic"
+          ? GIGANTIC_LANE
+          : LANES.find((l) => l.key === laneKey);
       const label =
         result.status === "routed"
           ? result.trackingNumber.replace(/^PKR-/, "")
@@ -82,8 +125,8 @@ export default function App() {
         ...f,
         { id: ++chipId, category: laneKey, color: lane.color, label, result },
       ]);
-      if (!silent) {
-        if (result.status === "rejected") toast(`Rejected: ${result.reason}`, true);
+      if (!silent && result.status === "rejected") {
+        toast(`Rejected: ${result.reason}`, true);
       }
       return result;
     },
@@ -102,8 +145,8 @@ export default function App() {
     stopRef.current = true;
     setRunning(false);
     await api.reset().catch(() => {});
-    setCounts({ small: 0, medium: 0, large: 0, rejected: 0 });
-    setLogs({ small: [], medium: [], large: [], rejected: [] });
+    setCounts(EMPTY_COUNTS);
+    setLogs(EMPTY_LOGS);
     setFlights([]);
     setProcessed(0);
     setTotal(0);
@@ -117,8 +160,8 @@ export default function App() {
     setRunning(true);
     stopRef.current = false;
     await api.reset().catch(() => {});
-    setCounts({ small: 0, medium: 0, large: 0, rejected: 0 });
-    setLogs({ small: [], medium: [], large: [], rejected: [] });
+    setCounts(EMPTY_COUNTS);
+    setLogs(EMPTY_LOGS);
     setProcessed(0);
 
     let packages;
@@ -175,7 +218,17 @@ export default function App() {
     [sendPackage, refreshState]
   );
 
+  /** After a comparison run, the backend state was reset — mirror that. */
+  const onComparisonDone = useCallback(() => {
+    setCounts(EMPTY_COUNTS);
+    setLogs(EMPTY_LOGS);
+    setProcessed(0);
+    setTotal(0);
+  }, []);
+
   const throughputTotal = total || 100;
+  const visibleLanes = giganticOn ? [...LANES, GIGANTIC_LANE] : LANES;
+  const largeRange = giganticOn ? "8,000 – 19,999 in³" : "≥ 8,000 in³";
 
   return (
     <div className="shell">
@@ -186,6 +239,20 @@ export default function App() {
             <h1>Package Router</h1>
             <small>Routing test console for product owners</small>
           </div>
+        </div>
+
+        <div
+          className={`feature-toggle ${giganticOn ? "on" : ""}`}
+          onClick={flipGigantic}
+          title="ENABLE_GIGANTIC_CATEGORY — flips routing at runtime"
+        >
+          <span className="ft-track">
+            <span className="ft-knob" />
+          </span>
+          <span className="ft-label">
+            Gigantic Category — {GIGANTIC_TICKET}
+            <small>{giganticOn ? "ON · ≥ 20,000 in³ → Gigantic" : "OFF · baseline routing"}</small>
+          </span>
         </div>
 
         <span className="spacer" />
@@ -211,6 +278,9 @@ export default function App() {
 
         <button className="primary" onClick={runAll} disabled={running}>
           {running ? "Processing…" : "▶ Process all 100"}
+        </button>
+        <button onClick={() => setCompareOpen(true)} disabled={running}>
+          ⇄ Before / After
         </button>
         <button className="danger" onClick={resetAll}>
           Reset
@@ -278,10 +348,10 @@ export default function App() {
         </aside>
 
         <main className="lanes">
-          {LANES.map((lane) => (
+          {visibleLanes.map((lane) => (
             <ConsumerLane
               key={lane.key}
-              lane={lane}
+              lane={lane.key === "large" ? { ...lane, range: largeRange } : lane}
               count={counts[lane.key]}
               packages={logs[lane.key]}
               landedAt={landed[lane.key]}
@@ -304,6 +374,14 @@ export default function App() {
           onSend={sendCustom}
           onSendRandom={sendTenRandom}
           onClose={() => setBuilderOpen(false)}
+        />
+      )}
+
+      {compareOpen && (
+        <Comparison
+          originalToggle={giganticOn}
+          onClose={() => setCompareOpen(false)}
+          onDone={onComparisonDone}
         />
       )}
 

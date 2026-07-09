@@ -67,7 +67,7 @@ def _process_one(package: Any) -> RoutingResult:
         return RoutingResult(trackingNumber=tracking, status="rejected", reason=reason)
 
     volume = compute_volume(dims)
-    category = categorize(volume)
+    category = categorize(volume, config.is_enabled("ENABLE_GIGANTIC_CATEGORY"))
     registry.deliver(category, _summary_fields(package, volume))
     return RoutingResult(
         trackingNumber=tracking, status="routed", category=category, volume=volume

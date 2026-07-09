@@ -7,6 +7,17 @@ export const LANES = [
   { key: "large", label: "Large", range: "≥ 8,000 in³", color: "var(--cat-large)" },
 ];
 
+// KAN-20 — shown only while ENABLE_GIGANTIC_CATEGORY is on. When active,
+// Large's effective range narrows to 8,000–19,999.
+export const GIGANTIC_LANE = {
+  key: "gigantic",
+  label: "Gigantic",
+  range: "≥ 20,000 in³",
+  color: "var(--cat-gigantic)",
+};
+export const GIGANTIC_TOGGLE = "ENABLE_GIGANTIC_CATEGORY";
+export const GIGANTIC_TICKET = "KAN-20";
+
 export const REJECTED = {
   key: "rejected",
   label: "Rejected",

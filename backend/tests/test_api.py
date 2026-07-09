@@ -86,3 +86,29 @@ class TestConfig:
     def test_unknown_toggle_404s(self) -> None:
         r = client.post("/config/toggle", json={"name": "NOT_A_TOGGLE"})
         assert r.status_code == 404
+
+    def test_gigantic_toggle_defaults_off(self) -> None:
+        r = client.get("/config")
+        assert r.json()["toggles"]["ENABLE_GIGANTIC_CATEGORY"] is False
+
+    def test_toggle_changes_routing_at_runtime(self) -> None:
+        """KAN-20: same package, different lane, no restart."""
+        pkg = {"trackingNumber": "T-GIG", "lengthIn": 50, "widthIn": 40, "heightIn": 10}  # 20,000
+
+        r = client.post("/packages/process", json=pkg)
+        assert r.json()["results"][0]["category"] == "large"
+
+        client.post("/config/toggle", json={"name": "ENABLE_GIGANTIC_CATEGORY", "value": True})
+        r = client.post("/packages/process", json=pkg)
+        assert r.json()["results"][0]["category"] == "gigantic"
+
+        # flip without explicit value inverts
+        client.post("/config/toggle", json={"name": "ENABLE_GIGANTIC_CATEGORY"})
+        r = client.post("/packages/process", json=pkg)
+        assert r.json()["results"][0]["category"] == "large"
+
+    def test_gigantic_lane_present_in_state(self) -> None:
+        client.post("/config/toggle", json={"name": "ENABLE_GIGANTIC_CATEGORY", "value": True})
+        client.post("/packages/process", json={"trackingNumber": "T-1", "lengthIn": 40, "widthIn": 40, "heightIn": 40})
+        state = client.get("/consumers/state").json()
+        assert state["consumers"]["gigantic"]["count"] == 1

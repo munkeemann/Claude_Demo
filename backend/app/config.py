@@ -8,7 +8,11 @@ extending DEFAULT_TOGGLES.
 from threading import Lock
 from typing import Dict
 
-DEFAULT_TOGGLES: Dict[str, bool] = {}
+DEFAULT_TOGGLES: Dict[str, bool] = {
+    # KAN-20: when ON, volume >= 20,000 in³ routes to the Gigantic consumer
+    # instead of Large. Flippable at runtime via POST /config/toggle.
+    "ENABLE_GIGANTIC_CATEGORY": False,
+}
 
 _lock = Lock()
 _toggles: Dict[str, bool] = dict(DEFAULT_TOGGLES)
