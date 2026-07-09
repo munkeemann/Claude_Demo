@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"></head><body style="margin:0;background:#f1f5f9;font-family:Segoe UI,Arial,sans-serif;color:#0f172a">
+<div style="max-width:680px;margin:0 auto;padding:24px">
+  <div style="background:linear-gradient(135deg,#0ea5e9,#06b6d4);border-radius:14px 14px 0 0;padding:22px 26px;color:#fff">
+    <div style="font-size:13px;opacity:.9;letter-spacing:.5px">RELEASE NOTIFICATION</div>
+    <div style="font-size:22px;font-weight:700;margin-top:4px">ParcelTrace 1.0 → L3 (Production)</div>
+    <div style="font-size:14px;opacity:.95;margin-top:4px">Thursday, July 9, 2026 · 20:00–21:00 ET</div>
+  </div>
+  <div style="background:#fff;border:1px solid #e2e8f0;border-top:none;border-radius:0 0 14px 14px;padding:24px 26px">
+    <p style="margin:0 0 16px">Hi all — <b>ParcelTrace 1.0</b> is scheduled to promote to <b>L3 (Production)</b>. This release moves <b>7 stories (23 points)</b> across 3 feature areas.</p>
+
+    <h3 style="margin:18px 0 8px;font-size:14px;text-transform:uppercase;letter-spacing:.6px;color:#0891b2">Why it matters</h3>
+    <ul style="margin:0;padding-left:20px"><li style="margin:6px 0"><b>Search shipments by tracking ID or keyword</b> <span style="color:#64748b">(KAN-6)</span><br><span style="color:#334155">Cuts lookup time from minutes to seconds; the single most-used action for support agents fielding "where is my package" calls.</span></li><li style="margin:6px 0"><b>Browse all shipments in a sortable directory</b> <span style="color:#64748b">(KAN-7)</span><br><span style="color:#334155">Gives supervisors a single triage surface instead of exporting to spreadsheets.</span></li><li style="margin:6px 0"><b>View full shipment detail panel</b> <span style="color:#64748b">(KAN-9)</span><br><span style="color:#334155">Keeps agents in flow; no full-page navigation means faster case handling.</span></li><li style="margin:6px 0"><b>See chronological scan-event tracking history</b> <span style="color:#64748b">(KAN-10)</span><br><span style="color:#334155">The core promise of a tracking product; directly reduces "where is it" contacts.</span></li><li style="margin:6px 0"><b>Highlight exception shipments with an alert banner</b> <span style="color:#64748b">(KAN-16)</span><br><span style="color:#334155">Drives proactive outreach on weather delays, address issues, and customs holds — the shipments most likely to generate complaints.</span></li><li style="margin:6px 0"><b>Surface delivery progress and ETA</b> <span style="color:#64748b">(KAN-17)</span><br><span style="color:#334155">Improves first-contact resolution by giving agents an ETA they can quote with confidence.</span></li><li style="margin:6px 0"><b>View planned itinerary with transport modes</b> <span style="color:#64748b">(KAN-11)</span><br><span style="color:#334155">Enables proactive intervention on at-risk connections before they become exceptions.</span></li></ul>
+
+    <h3 style="margin:20px 0 8px;font-size:14px;text-transform:uppercase;letter-spacing:.6px;color:#0891b2">What's changing</h3>
+    <ul style="margin:0;padding-left:20px"><li style="margin:5px 0"><b>KAN-6</b> — <span style="color:#334155">Client-side substring match over a precomputed haystack string per shipment; debounced input event.</span></li><li style="margin:5px 0"><b>KAN-7</b> — <span style="color:#334155">Stable comparator keyed by column; status sorts by a fixed severity order rather than alphabetically.</span></li><li style="margin:5px 0"><b>KAN-9</b> — <span style="color:#334155">Single reusable drawer element repopulated on open; overlay + transform transition; keydown listener for Escape.</span></li><li style="margin:5px 0"><b>KAN-10</b> — <span style="color:#334155">Reverse-ordered scanEvents array; CSS pseudo-element rail with a highlighted head node.</span></li><li style="margin:5px 0"><b>KAN-16</b> — <span style="color:#334155">Reads exception.{code,description}; banner is conditional; status color tokens per status.</span></li><li style="margin:5px 0"><b>KAN-17</b> — <span style="color:#334155">Status→progress mapping; date formatting via toLocaleString; delivered vs shipped chosen by presence of deliveredAt.</span></li><li style="margin:5px 0"><b>KAN-11</b> — <span style="color:#334155">Maps itinerary[].mode to an icon lookup; planned times formatted to short dates.</span></li></ul>
+
+    <h3 style="margin:20px 0 8px;font-size:14px;text-transform:uppercase;letter-spacing:.6px;color:#0891b2">Deployment</h3>
+    <table style="border-collapse:collapse;font-size:14px">
+      <tr><td style="padding:4px 12px 4px 0;color:#64748b;white-space:nowrap">Environment</td><td style="padding:4px 0;color:#0f172a"><b>L3 — Production</b></td></tr>
+      <tr><td style="padding:4px 12px 4px 0;color:#64748b;white-space:nowrap">Window</td><td style="padding:4px 0;color:#0f172a"><b>Thursday, July 9, 2026, 20:00–21:00 ET</b></td></tr>
+      <tr><td style="padding:4px 12px 4px 0;color:#64748b;white-space:nowrap">Deployed by</td><td style="padding:4px 0;color:#0f172a"><b>A. Rivera</b></td></tr>
+      <tr><td style="padding:4px 12px 4px 0;color:#64748b;white-space:nowrap">Approver</td><td style="padding:4px 0;color:#0f172a"><b>Release Manager</b></td></tr>
+      <tr><td style="padding:4px 12px 4px 0;color:#64748b;white-space:nowrap">Risk</td><td style="padding:4px 0;color:#0f172a"><b>Medium</b></td></tr>
+      <tr><td style="padding:4px 12px 4px 0;color:#64748b;white-space:nowrap">Change request</td><td style="padding:4px 0;color:#0f172a"><b>CHG-2026-0709</b></td></tr>
+      <tr><td style="padding:4px 12px 4px 0;color:#64748b;white-space:nowrap">Components</td><td style="padding:4px 0;color:#0f172a"><b>parceltrace-web, packages-data</b></td></tr>
+    </table>
+
+    <h3 style="margin:20px 0 8px;font-size:14px;text-transform:uppercase;letter-spacing:.6px;color:#0891b2">Rollback</h3>
+    <p style="margin:0;color:#334155">Re-point the L3 (Production) static host to the previous release tag and invalidate the CDN cache. No database migrations in this release, so rollback is a single redeploy of the prior build (est. &lt; 10 min).</p>
+
+    <p style="margin:18px 0 0;color:#64748b;font-size:13px">Tracking in Jira: <a href="https://maxjbjb-1783548766280.atlassian.net/browse/KAN-6" style="color:#0891b2">KAN-6</a>, <a href="https://maxjbjb-1783548766280.atlassian.net/browse/KAN-7" style="color:#0891b2">KAN-7</a>, <a href="https://maxjbjb-1783548766280.atlassian.net/browse/KAN-9" style="color:#0891b2">KAN-9</a>, <a href="https://maxjbjb-1783548766280.atlassian.net/browse/KAN-10" style="color:#0891b2">KAN-10</a>, <a href="https://maxjbjb-1783548766280.atlassian.net/browse/KAN-16" style="color:#0891b2">KAN-16</a>, <a href="https://maxjbjb-1783548766280.atlassian.net/browse/KAN-17" style="color:#0891b2">KAN-17</a>, <a href="https://maxjbjb-1783548766280.atlassian.net/browse/KAN-11" style="color:#0891b2">KAN-11</a></p>
+  </div>
+  <div style="text-align:center;color:#94a3b8;font-size:12px;padding:14px">Generated from release.json — ParcelTrace release automation</div>
+</div>
+</body></html>

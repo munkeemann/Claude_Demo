@@ -1,0 +1,35 @@
+{
+  "releaseName": "ParcelTrace 1.0",
+  "environment": "L3",
+  "environmentName": "Production",
+  "storyKeys": [
+    "KAN-6",
+    "KAN-7",
+    "KAN-9",
+    "KAN-10",
+    "KAN-16",
+    "KAN-17",
+    "KAN-11"
+  ],
+  "deployDate": "2026-07-09",
+  "deployWindow": "20:00–21:00 ET",
+  "deployedBy": "A. Rivera",
+  "approver": "Release Manager",
+  "riskLevel": "Medium",
+  "audience": {
+    "emailTo": "stakeholders@parceltrace.example",
+    "teamsChannel": "Releases",
+    "recipients": [
+      "Priya Natarajan (Product)",
+      "Marcus Webb (Ops Lead)",
+      "Elena Sokolova (QA)",
+      "Dev Patel (SRE On-call)",
+      "Sam Okafor (Support Mgr)"
+    ]
+  },
+  "rollbackPlan": "Re-point the L3 (Production) static host to the previous release tag and invalidate the CDN cache. No database migrations in this release, so rollback is a single redeploy of the prior build (est. < 10 min).",
+  "components": [
+    "parceltrace-web",
+    "packages-data"
+  ]
+}

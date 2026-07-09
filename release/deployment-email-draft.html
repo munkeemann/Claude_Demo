@@ -1,0 +1,73 @@
+<!-- DRAFT ONLY — NOT SENT. Simulated Move-to-Test (L3) dry-run; PR data and 3 stories are MOCK. -->
+<div style="font-family: Calibri, 'Segoe UI', Arial, sans-serif; max-width: 720px; margin: 0 auto; color: #1f2430;">
+
+  <div style="background:#5b21b6; color:#ffffff; padding:18px 26px; border-radius:8px 8px 0 0;">
+    <div style="font-size:11px; letter-spacing:1.5px; text-transform:uppercase; opacity:0.85;">Deployment notification — draft (simulated)</div>
+    <h1 style="margin:6px 0 0; font-size:20px;">[L3 / Test] Deployment Notification — Package Router v1.0.0 — July 10, 2026</h1>
+  </div>
+
+  <div style="border:1px solid #e2e0ee; border-top:none; padding:22px 26px; border-radius:0 0 8px 8px;">
+
+    <p style="background:#fff7ed; border:1px solid #fdba74; border-radius:6px; padding:10px 14px; font-size:13px;">
+      ⚠️ <b>SIMULATED DRY-RUN.</b> This draft was generated for a Move-to-Test rehearsal. PR references and three
+      stories are <b>MOCK</b>; Jira stories KAN-18…KAN-21 are real. Nothing has been deployed or sent.
+    </p>
+
+    <h2 style="font-size:15px; color:#5b21b6; border-bottom:2px solid #ede9fe; padding-bottom:6px;">Business value</h2>
+    <p style="font-size:14px; line-height:1.55;">
+      This release gives product owners a self-service way to <b>visually validate package-routing behavior before
+      changes reach production</b> — routing rules, malformed-data handling, and the proposed Gigantic category can now
+      be exercised and demonstrated without engineering time. The before/after comparison quantifies the routing change
+      (14 of 100 sample packages shift Large → Gigantic), turning a rules debate into an evidence-based decision.
+    </p>
+
+    <h2 style="font-size:15px; color:#5b21b6; border-bottom:2px solid #ede9fe; padding-bottom:6px;">Technical summary</h2>
+    <ul style="font-size:13.5px; line-height:1.6; padding-left:20px;">
+      <li><b>Components:</b> Routing Service (FastAPI, Python) · Dashboard UI (React/Vite) · feature-toggle config module</li>
+      <li><b>Scope:</b> 7 stories (4 real + 3 mock) · 58 automated tests passing · no database migrations</li>
+      <li><b>Notable PRs (MOCK):</b> #45 core service (KAN-18) · #46 dashboard (KAN-19) · #47 Gigantic toggle (KAN-20) · #48 <i>unlinked — dev-dependency bump, no Jira key</i></li>
+      <li><b>Config changes:</b> new toggle <code>ENABLE_GIGANTIC_CATEGORY</code> ships <b>OFF</b>; CORS narrowed for Test (mock KAN-24)</li>
+    </ul>
+
+    <h2 style="font-size:15px; color:#5b21b6; border-bottom:2px solid #ede9fe; padding-bottom:6px;">Schedule</h2>
+    <table style="font-size:13.5px; border-collapse:collapse;">
+      <tr><td style="padding:3px 18px 3px 0; color:#6b7280;">Window</td><td><b>Friday, July 10, 2026 · 14:00–15:00 ET</b> (expected duration ~45 min)</td></tr>
+      <tr><td style="padding:3px 18px 3px 0; color:#6b7280;">Environment</td><td>Test (L3)</td></tr>
+      <tr><td style="padding:3px 18px 3px 0; color:#6b7280;">Deployment ID</td><td>DEP-2026-0710-01 · Change request CHG-2026-0710-01</td></tr>
+      <tr><td style="padding:3px 18px 3px 0; color:#6b7280;">Deployer</td><td>A. Rivera (mock)</td></tr>
+    </table>
+
+    <h2 style="font-size:15px; color:#5b21b6; border-bottom:2px solid #ede9fe; padding-bottom:6px;">Rollback plan</h2>
+    <ul style="font-size:13.5px; line-height:1.6; padding-left:20px;">
+      <li><b>Triggers:</b> failed smoke test (100-package run ≠ 100 routed+rejected), any 5xx from <code>/packages/process</code>, or dashboard unreachable &gt; 5 min</li>
+      <li><b>Steps:</b> (1) disable <code>ENABLE_GIGANTIC_CATEGORY</code> via <code>POST /config/toggle</code> · (2) redeploy previous tag <code>v0.9.x</code> · (3) re-run smoke suite · (4) notify this list</li>
+      <li><b>Owner:</b> A. Rivera (mock) · reference <b>RBK-2026-0710-01</b> · decision point 14:30 ET</li>
+    </ul>
+
+    <h2 style="font-size:15px; color:#5b21b6; border-bottom:2px solid #ede9fe; padding-bottom:6px;">Stories in this release</h2>
+    <table style="width:100%; border-collapse:collapse; font-size:12.5px;">
+      <tr style="background:#ede9fe; text-align:left;">
+        <th style="padding:7px 10px; border:1px solid #ddd6fe;">Key</th>
+        <th style="padding:7px 10px; border:1px solid #ddd6fe;">Summary</th>
+        <th style="padding:7px 10px; border:1px solid #ddd6fe;">Business value</th>
+        <th style="padding:7px 10px; border:1px solid #ddd6fe;">Status</th>
+      </tr>
+      <tr><td style="padding:6px 10px; border:1px solid #ede9fe;"><b>KAN-18</b></td><td style="padding:6px 10px; border:1px solid #ede9fe;">Core processing service with routing and validation</td><td style="padding:6px 10px; border:1px solid #ede9fe;">Safe sandbox to test routing without production risk</td><td style="padding:6px 10px; border:1px solid #ede9fe;">Done ✅</td></tr>
+      <tr><td style="padding:6px 10px; border:1px solid #ede9fe;"><b>KAN-19</b></td><td style="padding:6px 10px; border:1px solid #ede9fe;">Executive-grade pipeline dashboard UI</td><td style="padding:6px 10px; border:1px solid #ede9fe;">Makes routing behavior visible to non-engineers</td><td style="padding:6px 10px; border:1px solid #ede9fe;">Done ✅</td></tr>
+      <tr><td style="padding:6px 10px; border:1px solid #ede9fe;"><b>KAN-20</b></td><td style="padding:6px 10px; border:1px solid #ede9fe;">Gigantic category behind ENABLE_GIGANTIC_CATEGORY toggle</td><td style="padding:6px 10px; border:1px solid #ede9fe;">Business controls when the new category activates</td><td style="padding:6px 10px; border:1px solid #ede9fe;">Done ✅</td></tr>
+      <tr><td style="padding:6px 10px; border:1px solid #ede9fe;"><b>KAN-21</b></td><td style="padding:6px 10px; border:1px solid #ede9fe;">Routing test suite and demo documentation</td><td style="padding:6px 10px; border:1px solid #ede9fe;">Confidence: 58 tests incl. exact boundary values</td><td style="padding:6px 10px; border:1px solid #ede9fe;">Done ✅</td></tr>
+      <tr style="background:#fafaf9;"><td style="padding:6px 10px; border:1px solid #ede9fe;"><b>KAN-22</b> <i>(MOCK)</i></td><td style="padding:6px 10px; border:1px solid #ede9fe;">Fix: comparison modal ignores Escape key</td><td style="padding:6px 10px; border:1px solid #ede9fe;">Smoother demo ergonomics</td><td style="padding:6px 10px; border:1px solid #ede9fe;">Ready for Test</td></tr>
+      <tr style="background:#fafaf9;"><td style="padding:6px 10px; border:1px solid #ede9fe;"><b>KAN-23</b> <i>(MOCK)</i></td><td style="padding:6px 10px; border:1px solid #ede9fe;">Fix: chip animation leak after rapid resets</td><td style="padding:6px 10px; border:1px solid #ede9fe;">Stability during long demo sessions</td><td style="padding:6px 10px; border:1px solid #ede9fe;">Ready for Test</td></tr>
+      <tr style="background:#fafaf9;"><td style="padding:6px 10px; border:1px solid #ede9fe;"><b>KAN-24</b> <i>(MOCK)</i></td><td style="padding:6px 10px; border:1px solid #ede9fe;">Config: restrict CORS to dashboard origin for Test env</td><td style="padding:6px 10px; border:1px solid #ede9fe;">Hardens the Test environment</td><td style="padding:6px 10px; border:1px solid #ede9fe;">Ready for Test</td></tr>
+    </table>
+
+    <p style="font-size:13px; color:#4b5563; margin-top:18px;">
+      <b>Contacts:</b> Deployer — A. Rivera (mock) · Product owner — M. Jablunovsky · On-call —
+      <i>#pkg-router-oncall</i>, PagerDuty rotation "Router-Test" (mock) · Questions: reply-all to this thread.
+    </p>
+
+    <p style="font-size:11.5px; color:#9ca3af; border-top:1px solid #eee; padding-top:10px;">
+      Draft generated 2026-07-09 by the simulated Move-to-Test workflow. Not sent to any recipient.
+    </p>
+  </div>
+</div>

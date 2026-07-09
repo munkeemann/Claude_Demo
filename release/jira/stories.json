@@ -1,0 +1,187 @@
+{
+  "jira": {
+    "site": "https://maxjbjb-1783548766280.atlassian.net",
+    "cloudId": "0c19b40b-34fc-4259-9cc2-6594f7f421b6",
+    "projectKey": "KAN",
+    "createdAt": "2026-07-08"
+  },
+  "epic": {
+    "key": "KAN-1",
+    "summary": "Package Tracking Console (ParcelTrace)",
+    "description": "Customer- and ops-facing web console for tracking parcels end to end: search, status overview, per-shipment detail with scan history and itinerary, and exception surfacing. Built on the shipment dataset (100 shipments, 640 scan events across 4 carriers).",
+    "labels": ["parceltrace", "epic"]
+  },
+  "features": [
+    { "ref": "F1", "key": "KAN-2", "summary": "Shipment Search & Directory", "description": "Find and browse shipments quickly across the whole book of business.", "labels": ["parceltrace", "feature", "search"] },
+    { "ref": "F2", "key": "KAN-3", "summary": "Shipment Detail & Tracking History", "description": "Deep view of a single shipment: scan-event timeline, itinerary, and package attributes.", "labels": ["parceltrace", "feature", "detail"] },
+    { "ref": "F3", "key": "KAN-4", "summary": "Status Overview & Filtering", "description": "At-a-glance status counts and the ability to narrow the directory by status, carrier, and service level.", "labels": ["parceltrace", "feature", "filtering"] },
+    { "ref": "F4", "key": "KAN-5", "summary": "Exceptions & Delivery Alerts", "description": "Make problem shipments and delivery progress impossible to miss.", "labels": ["parceltrace", "feature", "exceptions"] }
+  ],
+  "stories": [
+    {
+      "ref": "S1", "key": "KAN-6", "feature": "F1", "featureKey": "KAN-2",
+      "summary": "Search shipments by tracking ID or keyword",
+      "storyPoints": 3,
+      "labels": ["parceltrace", "search"],
+      "description": "As an operations user, I want a single search box that matches on tracking ID, city, carrier, recipient, sender, and contents so that I can find any shipment without knowing which field it lives in.",
+      "acceptanceCriteria": [
+        "Search matches across tracking ID, origin/destination/current city, carrier, sender, recipient, and contents category",
+        "Results update live as I type (no submit button)",
+        "Result count reflects the filtered set (\"N of 100 shipments\")"
+      ],
+      "businessValue": "Cuts lookup time from minutes to seconds; the single most-used action for support agents fielding \"where is my package\" calls.",
+      "techNotes": "Client-side substring match over a precomputed haystack string per shipment; debounced input event."
+    },
+    {
+      "ref": "S2", "key": "KAN-7", "feature": "F1", "featureKey": "KAN-2",
+      "summary": "Browse all shipments in a sortable directory",
+      "storyPoints": 3,
+      "labels": ["parceltrace", "search"],
+      "description": "As an ops user, I want a sortable table of all shipments so that I can scan the book of business and order it by the column I care about.",
+      "acceptanceCriteria": [
+        "Table lists tracking ID, carrier, service, status, route, ETA, and weight",
+        "Clicking a column header sorts by it; clicking again reverses direction",
+        "Sort indicator (▲/▼) shows the active column and direction"
+      ],
+      "businessValue": "Gives supervisors a single triage surface instead of exporting to spreadsheets.",
+      "techNotes": "Stable comparator keyed by column; status sorts by a fixed severity order rather than alphabetically."
+    },
+    {
+      "ref": "S3", "key": "KAN-8", "feature": "F1", "featureKey": "KAN-2",
+      "summary": "See origin → destination route at a glance",
+      "storyPoints": 2,
+      "labels": ["parceltrace", "search"],
+      "description": "As an ops user, I want each row to show the origin and destination cities so that I can understand a shipment's lane without opening it.",
+      "acceptanceCriteria": [
+        "Each row renders \"Origin → Destination\" with a clear arrow",
+        "Route is also a sortable column"
+      ],
+      "businessValue": "Faster lane-level triage; supports spotting mis-routed shipments in the list.",
+      "techNotes": "Derived display field; route sort key is the concatenated origin+destination string."
+    },
+    {
+      "ref": "S4", "key": "KAN-9", "feature": "F2", "featureKey": "KAN-3",
+      "summary": "View full shipment detail panel",
+      "storyPoints": 3,
+      "labels": ["parceltrace", "detail"],
+      "description": "As an ops user, I want to open a shipment into a detail drawer so that I can see everything about it without leaving the directory.",
+      "acceptanceCriteria": [
+        "Clicking a row opens a slide-in drawer with the shipment header, status, and progress bar",
+        "Drawer closes via the X button, clicking the overlay, or pressing Escape",
+        "Underlying list state (search/filter/sort) is preserved when the drawer closes"
+      ],
+      "businessValue": "Keeps agents in flow; no full-page navigation means faster case handling.",
+      "techNotes": "Single reusable drawer element repopulated on open; overlay + transform transition; keydown listener for Escape."
+    },
+    {
+      "ref": "S5", "key": "KAN-10", "feature": "F2", "featureKey": "KAN-3",
+      "summary": "See chronological scan-event tracking history",
+      "storyPoints": 5,
+      "labels": ["parceltrace", "detail"],
+      "description": "As a customer-facing agent, I want a timeline of scan events (most recent first) so that I can tell a customer exactly where their package has been.",
+      "acceptanceCriteria": [
+        "Events render newest-first with description, facility, city/state, and timestamp",
+        "The most recent event is visually emphasized as the current status",
+        "Timeline handles shipments with 1 to 12 events without layout breakage"
+      ],
+      "businessValue": "The core promise of a tracking product; directly reduces \"where is it\" contacts.",
+      "techNotes": "Reverse-ordered scanEvents array; CSS pseudo-element rail with a highlighted head node."
+    },
+    {
+      "ref": "S6", "key": "KAN-11", "feature": "F2", "featureKey": "KAN-3",
+      "summary": "View planned itinerary with transport modes",
+      "storyPoints": 3,
+      "labels": ["parceltrace", "detail"],
+      "description": "As an ops planner, I want to see the planned leg-by-leg itinerary with transport mode so that I can anticipate hand-offs and connection risk.",
+      "acceptanceCriteria": [
+        "Each leg shows from → to, mode (air/truck/rail) with an icon, and planned departure/arrival",
+        "Legs render in planned order"
+      ],
+      "businessValue": "Enables proactive intervention on at-risk connections before they become exceptions.",
+      "techNotes": "Maps itinerary[].mode to an icon lookup; planned times formatted to short dates."
+    },
+    {
+      "ref": "S7", "key": "KAN-12", "feature": "F2", "featureKey": "KAN-3",
+      "summary": "See package dimensions, weight, and declared value",
+      "storyPoints": 2,
+      "labels": ["parceltrace", "detail"],
+      "description": "As an ops user, I want package attributes (weight, dimensions, declared value, fragile/signature flags) so that I can handle claims and special-handling questions.",
+      "acceptanceCriteria": [
+        "Detail shows weight, L×W×H dimensions, declared value, and piece count",
+        "Fragile, signature-required, and international flags render as tags when present"
+      ],
+      "businessValue": "Supports claims, customs, and special-handling workflows from one screen.",
+      "techNotes": "Reads package.* and top-level international; tags rendered conditionally."
+    },
+    {
+      "ref": "S8", "key": "KAN-13", "feature": "F3", "featureKey": "KAN-4",
+      "summary": "Status summary chips with live counts",
+      "storyPoints": 3,
+      "labels": ["parceltrace", "filtering"],
+      "description": "As a supervisor, I want status chips showing counts (delivered, in transit, exceptions, etc.) so that I can read the health of the book of business instantly.",
+      "acceptanceCriteria": [
+        "Chips show a count per status plus an \"All\" total",
+        "Clicking a chip filters the directory to that status",
+        "The active chip is visually highlighted"
+      ],
+      "businessValue": "Turns the console into a lightweight ops dashboard; surfaces spikes in exceptions.",
+      "techNotes": "Counts computed once from the dataset; chip click sets the status filter and re-renders."
+    },
+    {
+      "ref": "S9", "key": "KAN-14", "feature": "F3", "featureKey": "KAN-4",
+      "summary": "Filter shipments by status",
+      "storyPoints": 2,
+      "labels": ["parceltrace", "filtering"],
+      "description": "As an ops user, I want to filter the directory by a specific status so that I can work a single queue (e.g., only exceptions).",
+      "acceptanceCriteria": [
+        "Selecting a status shows only shipments in that status",
+        "Status filter composes with search and other filters",
+        "Clearing the filter (All) restores the full list"
+      ],
+      "businessValue": "Enables queue-based work assignment across a team.",
+      "techNotes": "Shared filter predicate; status filter is one clause AND-ed with the others."
+    },
+    {
+      "ref": "S10", "key": "KAN-15", "feature": "F3", "featureKey": "KAN-4",
+      "summary": "Filter by carrier and service level",
+      "storyPoints": 2,
+      "labels": ["parceltrace", "filtering"],
+      "description": "As an ops user, I want carrier and service-level dropdowns so that I can focus on one carrier's shipments or expedited service tiers.",
+      "acceptanceCriteria": [
+        "Carrier dropdown lists all carriers present in the data",
+        "Service dropdown lists levels in priority order (Overnight → Economy)",
+        "Both filters compose with search and status filter"
+      ],
+      "businessValue": "Supports carrier-specific SLAs and expedited-shipment monitoring.",
+      "techNotes": "Options derived from the dataset; values AND-ed into the shared predicate."
+    },
+    {
+      "ref": "S11", "key": "KAN-16", "feature": "F4", "featureKey": "KAN-5",
+      "summary": "Highlight exception shipments with an alert banner",
+      "storyPoints": 3,
+      "labels": ["parceltrace", "exceptions"],
+      "description": "As a customer-facing agent, I want exception shipments to show a prominent alert with the reason so that I can proactively address problems.",
+      "acceptanceCriteria": [
+        "Exception status renders in a distinct alert color in list and detail",
+        "Detail drawer shows an exception banner with the exception code and description",
+        "Banner only appears for shipments that actually have an exception"
+      ],
+      "businessValue": "Drives proactive outreach on weather delays, address issues, and customs holds — the shipments most likely to generate complaints.",
+      "techNotes": "Reads exception.{code,description}; banner is conditional; status color tokens per status."
+    },
+    {
+      "ref": "S12", "key": "KAN-17", "feature": "F4", "featureKey": "KAN-5",
+      "summary": "Surface delivery progress and ETA",
+      "storyPoints": 3,
+      "labels": ["parceltrace", "exceptions"],
+      "description": "As a customer-facing agent, I want a progress bar and clear ETA on each shipment so that I can set accurate expectations.",
+      "acceptanceCriteria": [
+        "Detail drawer shows a progress bar mapped to the shipment's status",
+        "Estimated delivery and delivered/shipped timestamps are shown and human-readable",
+        "Delivered shipments show the actual delivery time"
+      ],
+      "businessValue": "Improves first-contact resolution by giving agents an ETA they can quote with confidence.",
+      "techNotes": "Status→progress mapping; date formatting via toLocaleString; delivered vs shipped chosen by presence of deliveredAt."
+    }
+  ]
+}
