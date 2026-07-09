@@ -296,9 +296,20 @@ for (const p of packages) {
 }
 fs.writeFileSync(path.join(outDir, 'packages.csv'), csvRows.join('\n'));
 
+// browser-friendly copy for the demo app (loads via <script src> under file://)
+fs.writeFileSync(
+  path.join(outDir, 'packages.js'),
+  'window.PACKAGES = ' + JSON.stringify(packages) + ';\n',
+);
+
 // console summary
 const byStatus = {};
 for (const p of packages) byStatus[p.status] = (byStatus[p.status] || 0) + 1;
 console.log(`Generated ${packages.length} packages -> data/packages.json, data/packages.csv`);
 console.log('Status mix:', JSON.stringify(byStatus));
 console.log('Total scan events:', packages.reduce((s, p) => s + p.scanEvents.length, 0));
+
+// rebuild the self-contained app so index.html carries the fresh data
+if (fs.existsSync(path.join(__dirname, 'build-app.js'))) {
+  require('./build-app.js');
+}
