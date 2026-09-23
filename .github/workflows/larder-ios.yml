@@ -1,0 +1,92 @@
+name: Larder iOS
+
+on:
+  push:
+    branches: [main, "claude/**"]
+    paths:
+      - "Larder/**"
+      - ".github/workflows/larder-ios.yml"
+  pull_request:
+    paths:
+      - "Larder/**"
+      - ".github/workflows/larder-ios.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: larder-ios-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  core-linux:
+    name: InventoryCore tests (Linux)
+    runs-on: ubuntu-latest
+    container: swift:6.1-noble
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: swift test
+        run: swift test --package-path Larder/Packages/InventoryCore
+
+  app-macos:
+    name: App build and tests (iOS Simulator)
+    runs-on: macos-15
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Toolchain versions
+        run: |
+          xcodebuild -version
+          swift --version
+
+      - name: InventoryCore tests (macOS)
+        run: swift test --package-path Larder/Packages/InventoryCore
+
+      - name: Install XcodeGen and xcbeautify
+        run: brew install xcodegen xcbeautify
+
+      - name: Generate Xcode project
+        working-directory: Larder
+        run: xcodegen generate
+
+      - name: Pick an iPhone simulator
+        id: sim
+        run: |
+          UDID=$(xcrun simctl list devices available --json | python3 -c '
+          import json, re, sys
+          devices = json.load(sys.stdin)["devices"]
+          best = None
+          for runtime, entries in devices.items():
+              match = re.search(r"iOS-(\d+)-(\d+)", runtime)
+              if not match:
+                  continue
+              version = (int(match.group(1)), int(match.group(2)))
+              for device in entries:
+                  if device["name"].startswith("iPhone") and (best is None or version > best[0]):
+                      best = (version, device["udid"], device["name"])
+          if best is None:
+              sys.exit("no iPhone simulator available")
+          print(best[1])
+          print(f"Using {best[2]} (iOS {best[0][0]}.{best[0][1]})", file=sys.stderr)
+          ')
+          echo "udid=$UDID" >> "$GITHUB_OUTPUT"
+
+      - name: Build and test app
+        working-directory: Larder
+        run: |
+          set -o pipefail
+          xcodebuild test \
+            -project Larder.xcodeproj \
+            -scheme Larder \
+            -destination "id=${{ steps.sim.outputs.udid }}" \
+            -resultBundlePath TestResults.xcresult \
+            CODE_SIGNING_ALLOWED=NO \
+            | xcbeautify --renderer github-actions
+
+      - name: Upload test results
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: TestResults
+          path: Larder/TestResults.xcresult
+          retention-days: 7
