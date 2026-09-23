@@ -65,6 +65,28 @@ environment.
 - The API key is read from the Keychain for each request and is never logged or written to
   UserDefaults.
 
+## Receipt pipeline (Phase 2)
+
+1. **Capture.** `VNDocumentCameraViewController` (device), `PhotosPicker`, pasted text, or the
+   bundled sample receipt.
+2. **OCR.** `VNRecognizeTextRequest` at `.accurate` with language correction off, because
+   correction mangles abbreviations. `OCRLineAssembler` regroups fragments into rows by vertical
+   overlap, since Vision splits the description and price columns.
+3. **Hints.** `ReceiptPrompt.relevantHints` picks the remembered `ProductAlias` (receiptText)
+   mappings whose key appears on this receipt, and lists them in the prompt.
+4. **Extraction.** `AnthropicLLMService.extractReceipt` sends a stable system prompt and a
+   per-receipt user message, with a JSON schema (`ReceiptExtractionSchema`) for structured output.
+   Line items include rawText, name, brand, category, quantity, unit, package size, price,
+   location, shelf life and confidence.
+5. **Review.** `ReceiptReview` applies remembered mappings deterministically: a matching alias
+   always wins over Claude. It also checks that the line prices add up to the subtotal. The user
+   can edit, skip or re-locate each line.
+6. **Import.** `InventoryStore.importReceipt` creates or reuses products, items and purchase
+   events linked to a `Receipt`. It upserts one receiptText alias per line, keyed by
+   `ReceiptText.key` (item codes, prices and tax flags stripped), so any corrections carry over to
+   the next scan. Claude's shelf-life estimate becomes the item's estimated expiry and fills the
+   product's shelf-life override for that climate if it was empty.
+
 ## Data model (SwiftData, CloudKit-ready)
 
 CloudKit compatibility rules, applied from day one:

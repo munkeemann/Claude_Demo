@@ -9,6 +9,7 @@ enum Persistence {
         InventoryItem.self,
         PurchaseEvent.self,
         UsageEvent.self,
+        Receipt.self,
     ]
 
     /// Creates the app's model container. CloudKit is explicitly off for now;

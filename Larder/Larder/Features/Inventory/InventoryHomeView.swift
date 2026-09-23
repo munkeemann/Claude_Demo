@@ -11,6 +11,7 @@ struct InventoryHomeView: View {
     @State private var filter = InventoryFilter()
     @State private var editor: EditorSheet?
     @State private var isScanning = false
+    @State private var isScanningReceipt = false
     @State private var isShowingFilters = false
     @State private var useSomeItem: InventoryItem?
     @State private var errorMessage: String?
@@ -38,6 +39,9 @@ struct InventoryHomeView: View {
         .sheet(isPresented: $isScanning) {
             ScanBarcodeFlow()
         }
+        .sheet(isPresented: $isScanningReceipt) {
+            ReceiptScanFlow()
+        }
         .sheet(item: $useSomeItem) { item in
             UseSomeSheet(item: item)
         }
@@ -59,6 +63,7 @@ struct InventoryHomeView: View {
             } actions: {
                 Button("Add Item") { editor = .add(ItemDraft()) }
                     .buttonStyle(.borderedProminent)
+                Button("Scan Receipt") { isScanningReceipt = true }
                 Button("Scan Barcode") { isScanning = true }
                 Button("Load Sample Data") { perform { try store.loadSampleData() } }
             }
@@ -163,8 +168,9 @@ struct InventoryHomeView: View {
         }
         ToolbarItem(placement: .primaryAction) {
             Menu {
-                Button { editor = .add(ItemDraft()) } label: { Label("Add Manually", systemImage: "square.and.pencil") }
+                Button { isScanningReceipt = true } label: { Label("Scan Receipt", systemImage: "doc.text.viewfinder") }
                 Button { isScanning = true } label: { Label("Scan Barcode", systemImage: "barcode.viewfinder") }
+                Button { editor = .add(ItemDraft()) } label: { Label("Add Manually", systemImage: "square.and.pencil") }
             } label: {
                 Label("Add", systemImage: "plus")
             }

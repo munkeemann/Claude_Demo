@@ -29,6 +29,16 @@ To run on a device, set your team in `project.yml` (`DEVELOPMENT_TEAM`) or in Xc
 settings. The camera features (barcode scanner, document camera) only work on a real device; the
 Simulator offers manual barcode entry and receipt paste/import instead.
 
+## Claude features
+
+Receipt scanning (and, later, recipe suggestions) call the Anthropic Messages API with your own
+key. In the app, open **Settings → Claude**, paste a key from
+[console.anthropic.com](https://console.anthropic.com), and tap **Test Connection**. The key is
+stored in the iOS Keychain (this device only). The model picker defaults to Claude Opus 5.
+
+Without a key you can still try **Scan Receipt → Try the Sample Receipt**, which shows a
+pre-computed result for the bundled sample receipt.
+
 ## Tests
 
 All forecasting, parsing, and client logic lives in the `InventoryCore` Swift package, which has
@@ -38,7 +48,8 @@ no Apple-only dependencies:
 swift test --package-path Packages/InventoryCore
 ```
 
-It also runs on Linux (for example `docker run --rm -v "$PWD/Packages/InventoryCore":/pkg -w /pkg swift:6.1-noble swift test`).
+It also runs on Linux. `scripts/check-linux.sh` runs the package tests plus a syntax check of the
+app sources inside the `swift:6.1-noble` Docker image.
 
 App-level tests (SwiftData mappers and repositories) run in Xcode with ⌘U or:
 

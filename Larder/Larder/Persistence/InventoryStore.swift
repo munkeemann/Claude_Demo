@@ -130,16 +130,27 @@ struct InventoryStore {
 
     func attachBarcode(_ code: String?, to product: Product) throws {
         guard let code else { return }
-        let key = TextNormalizer.barcode(code)
-        guard !key.isEmpty else { return }
-        if let existing = try alias(kind: .barcode, value: key) {
+        try attachAlias(kind: .barcode, value: TextNormalizer.barcode(code), to: product)
+    }
+
+    /// Points an alias at `product`, creating it if needed. Re-pointing an
+    /// existing alias is how corrections replace earlier mappings.
+    func attachAlias(kind: AliasKind, value: String, to product: Product) throws {
+        guard !value.isEmpty else { return }
+        if let existing = try alias(kind: kind, value: value) {
             existing.product = product
             existing.lastUsedAt = now()
             return
         }
-        let alias = ProductAlias(kind: .barcode, value: key, now: now())
+        let alias = ProductAlias(kind: kind, value: value, now: now())
         context.insert(alias)
         alias.product = product
+    }
+
+    func product(id: UUID) throws -> Product? {
+        var descriptor = FetchDescriptor<Product>(predicate: #Predicate<Product> { product in product.id == id })
+        descriptor.fetchLimit = 1
+        return try context.fetch(descriptor).first
     }
 
     private func applyProductFields(from draft: ItemDraft, to product: Product) {
@@ -163,13 +174,26 @@ struct InventoryStore {
         guard draft.isValid else { throw InventoryStoreError.invalidDraft(draft.issues) }
         let product = try findOrCreateProduct(for: draft)
         applyProductFields(from: draft, to: product)
+        let item = try insertStock(from: draft, product: product, source: source)
+        try context.save()
+        return item
+    }
 
+    /// Inserts an item plus its purchase event. Does not save.
+    private func insertStock(
+        from draft: ItemDraft,
+        product: Product,
+        source: PurchaseSource,
+        storeName: String? = nil,
+        receipt: Receipt? = nil,
+        currencyCode: String? = nil
+    ) throws -> InventoryItem {
         let item = InventoryItem(
             quantity: draft.quantity,
             unit: draft.unit,
             purchaseDate: draft.purchaseDate,
             expiryDate: draft.expiryDate,
-            expiryIsOverride: draft.expiryDate != nil,
+            expiryIsOverride: draft.expiryDate != nil && !draft.expiryIsEstimate,
             notes: draft.notes,
             now: now()
         )
@@ -177,19 +201,102 @@ struct InventoryStore {
         item.product = product
         item.location = try location(id: draft.locationID)
 
+        // Remember a suggested shelf life for this climate unless one is set.
+        if let days = draft.estimatedShelfLifeDays, let climate = item.location?.climate {
+            switch climate {
+            case .room where product.shelfLifeRoomDays == nil: product.shelfLifeRoomDays = days
+            case .fridge where product.shelfLifeFridgeDays == nil: product.shelfLifeFridgeDays = days
+            case .freezer where product.shelfLifeFreezerDays == nil: product.shelfLifeFreezerDays = days
+            default: break
+            }
+        }
+
         let purchase = PurchaseEvent(
             date: draft.purchaseDate,
             quantity: draft.quantity,
             unit: draft.unit,
             source: source,
             priceCents: draft.priceCents,
+            currencyCode: currencyCode ?? Locale.current.currency?.identifier ?? "USD",
+            storeName: storeName,
             now: now()
         )
         context.insert(purchase)
         purchase.product = product
-
-        try context.save()
+        purchase.receipt = receipt
         return item
+    }
+
+    // MARK: - Receipts
+
+    /// Every remembered receipt-text → product mapping.
+    func receiptHints() throws -> [ReceiptHint] {
+        let kindRaw = AliasKind.receiptText.rawValue
+        let aliases = try context.fetch(
+            FetchDescriptor<ProductAlias>(predicate: #Predicate<ProductAlias> { alias in alias.kindRaw == kindRaw })
+        )
+        return aliases.compactMap { alias -> ReceiptHint? in
+            guard let product = alias.product else { return nil }
+            return ReceiptHint(
+                key: alias.value,
+                productID: product.id,
+                name: product.name,
+                brand: product.brand,
+                category: product.category,
+                unit: product.defaultUnit
+            )
+        }
+    }
+
+    /// Adds every included line as stock, logs purchases against a `Receipt`,
+    /// and remembers each line's text → product mapping so the same receipt
+    /// text resolves the same way next time (including any corrections).
+    @discardableResult
+    func importReceipt(_ review: ReceiptReview) throws -> [InventoryItem] {
+        let lines = review.includedLines
+        guard !lines.isEmpty else { return [] }
+        let invalid = lines.filter { !$0.isValid }
+        guard invalid.isEmpty else { throw InventoryStoreError.invalidDraft([.missingName]) }
+
+        let storeName = review.storeName.trimmingCharacters(in: .whitespacesAndNewlines)
+        let receipt = Receipt(
+            storeName: storeName.isEmpty ? nil : storeName,
+            purchaseDate: review.purchaseDate,
+            totalCents: review.totalCents,
+            currencyCode: review.currencyCode,
+            rawText: review.rawText,
+            now: now()
+        )
+        context.insert(receipt)
+
+        var items: [InventoryItem] = []
+        for line in lines {
+            let draft = line.draft(purchaseDate: review.purchaseDate)
+            let product: Product
+            if let id = line.matchedProductID, !line.wasCorrected, let matched = try self.product(id: id) {
+                product = matched
+            } else if let existing = try self.product(named: draft.trimmedName, brand: draft.trimmedBrand) {
+                product = existing
+            } else {
+                product = Product(name: draft.trimmedName, brand: draft.trimmedBrand, category: draft.category, now: now())
+                context.insert(product)
+                applyProductFields(from: draft, to: product)
+            }
+            if product.packageSizeText == nil, let size = draft.packageSizeText {
+                product.packageSizeText = size
+            }
+            try attachAlias(kind: .receiptText, value: line.aliasKey, to: product)
+            items.append(try insertStock(
+                from: draft,
+                product: product,
+                source: .receipt,
+                storeName: receipt.storeName,
+                receipt: receipt,
+                currencyCode: review.currencyCode
+            ))
+        }
+        try context.save()
+        return items
     }
 
     /// Applies edits from the item form. Quantity edits are corrections, so
@@ -325,6 +432,9 @@ struct InventoryStore {
         }
         for alias in try context.fetch(FetchDescriptor<ProductAlias>()) {
             context.delete(alias)
+        }
+        for receipt in try context.fetch(FetchDescriptor<Receipt>()) {
+            context.delete(receipt)
         }
         try context.save()
     }

@@ -19,6 +19,11 @@ public struct ItemDraft: Sendable, Hashable {
     public var isIngredient: Bool
     public var tracksRunOut: Bool
     public var tracksExpiry: Bool
+    /// True when `expiryDate` is an estimate (receipt shelf life, shelf-life
+    /// table) rather than a date the user entered.
+    public var expiryIsEstimate: Bool = false
+    /// Shelf life suggested for this product at the chosen location, in days.
+    public var estimatedShelfLifeDays: Int?
 
     public init(
         name: String = "",

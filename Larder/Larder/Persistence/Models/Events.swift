@@ -19,6 +19,7 @@ final class PurchaseEvent {
     var createdAt: Date = Date()
 
     var product: Product?
+    var receipt: Receipt?
 
     init(
         date: Date,

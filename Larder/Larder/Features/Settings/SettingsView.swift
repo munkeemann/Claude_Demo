@@ -11,6 +11,8 @@ struct SettingsView: View {
     var body: some View {
         NavigationStack {
             Form {
+                ClaudeSettingsSection()
+
                 Section("Inventory") {
                     NavigationLink {
                         LocationsSettingsView()
@@ -83,4 +85,5 @@ struct SettingsView: View {
 #Preview {
     SettingsView()
         .modelContainer(PreviewSupport.container)
+        .environment(AppEnvironment.preview())
 }
