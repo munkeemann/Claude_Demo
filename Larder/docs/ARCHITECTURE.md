@@ -185,4 +185,4 @@ timestamps and the append-only event logs are what make that practical.
    views, notifications, auto shopping list.
 4. Recipes: Claude suggestions prioritizing expiring items, filters, missing-to-shopping-list,
    cooked → usage events, favorites.
-5. Online orders: design only (see `ONLINE_ORDERS.md`).
+5. Online orders: design only (see [ONLINE_ORDERS.md](ONLINE_ORDERS.md)).

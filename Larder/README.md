@@ -7,7 +7,18 @@ will expire or run out, and suggests recipes from what you have.
 - Claude (Anthropic Messages API) for receipt parsing and recipe suggestions, using your own API key
 - VisionKit / Vision for barcode, document and text scanning; OpenFoodFacts for barcode lookup
 
-See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for the design.
+See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for the design and
+[docs/ONLINE_ORDERS.md](docs/ONLINE_ORDERS.md) for the Amazon / online-order plan.
+
+## Features
+
+| Tab | What it does |
+|---|---|
+| Inventory | Items grouped by storage location, with search and filters. Swipe for used some / used up / tossed. Add items by hand, by barcode (Open Food Facts), or from a receipt (Claude). |
+| Soon | Items expiring soon, products predicted to run low (with confidence), and regulars you're probably out of. |
+| Recipes | Claude suggestions built around what's in stock, expiring items first. Filter by meal, time and missing ingredients. Add missing items to the list in one tap. "I cooked this" logs usage. Favorites. |
+| Shopping | Suggested items from run-out predictions, plus your own entries. |
+| Settings | Claude API key and model, reminders and look-ahead, storage locations, sample data. |
 
 ## Requirements
 
