@@ -210,6 +210,9 @@ struct InventoryStore {
             default: break
             }
         }
+        if item.expiryDate == nil {
+            applyEstimatedExpiry(to: item)
+        }
 
         let purchase = PurchaseEvent(
             date: draft.purchaseDate,
@@ -307,10 +310,14 @@ struct InventoryStore {
             applyProductFields(from: draft, to: product)
             try attachBarcode(draft.barcode, to: product)
         }
-        if draft.expiryDate != item.expiryDate {
+        let expiryEdited = draft.expiryDate != item.expiryDate
+        if expiryEdited {
             item.expiryIsOverride = draft.expiryDate != nil
         }
         item.expiryDate = draft.expiryDate
+        if draft.quantity != item.quantity || draft.unit != item.unit {
+            item.quantityObservedAt = now()
+        }
         if draft.unit != item.unit || draft.quantity > item.initialQuantity {
             item.initialQuantity = draft.quantity
         }
@@ -319,9 +326,41 @@ struct InventoryStore {
         item.status = QuickActionCalculator.status(forQuantity: draft.quantity, initialQuantity: item.initialQuantity)
         item.purchaseDate = draft.purchaseDate
         item.notes = draft.notes
+        let previousClimate = item.location?.climate
         item.location = try location(id: draft.locationID)
+        // Moving an item to a colder or warmer place changes its estimate.
+        if !expiryEdited && !item.expiryIsOverride && item.location?.climate != previousClimate {
+            item.expiryDate = nil
+            applyEstimatedExpiry(to: item)
+        }
         item.updatedAt = now()
         try context.save()
+    }
+
+    // MARK: - Expiry estimates
+
+    /// Sets an estimated expiry from the product's shelf life (for the item's
+    /// climate) or the category table. User-set dates are never touched.
+    func applyEstimatedExpiry(to item: InventoryItem) {
+        guard !item.expiryIsOverride, let product = item.product, product.tracksExpiry else { return }
+        let climate = item.location?.climate ?? product.category.defaultClimate
+        let estimate = ExpiryEstimator.estimate(
+            purchaseDate: item.purchaseDate,
+            category: product.category,
+            climate: climate,
+            productShelfLifeDays: product.shelfLifeDays(for: climate)
+        )
+        item.expiryDate = estimate?.date
+    }
+
+    /// Fills in estimates for in-stock items that have none. Safe to call
+    /// on every launch.
+    func refreshEstimatedExpiries() throws {
+        let items = try context.fetch(FetchDescriptor<InventoryItem>())
+        for item in items where item.expiryDate == nil && item.status.isActive {
+            applyEstimatedExpiry(to: item)
+        }
+        if context.hasChanges { try context.save() }
     }
 
     /// Removes an item entered by mistake. Purchase and usage history stays
@@ -337,6 +376,7 @@ struct InventoryStore {
         let result = QuickActionCalculator.apply(action, to: item.state)
         item.quantity = result.quantity
         item.status = result.status
+        item.quantityObservedAt = now()
         item.updatedAt = now()
 
         if result.usageQuantity > 0 || result.usageType != .partiallyUsed {
@@ -353,6 +393,71 @@ struct InventoryStore {
         }
         try context.save()
         return result
+    }
+
+    // MARK: - Shopping list
+
+    func shoppingItems() throws -> [ShoppingListItem] {
+        try context.fetch(FetchDescriptor<ShoppingListItem>(sortBy: [SortDescriptor(\.addedAt)]))
+    }
+
+    /// Adds an entry unless an unchecked one for the same product (or the
+    /// same name, for free-text entries) is already on the list.
+    @discardableResult
+    func addToShoppingList(
+        name: String,
+        quantity: Double = 1,
+        unit: MeasureUnit = .each,
+        reason: ShoppingReason = .manual,
+        product: Product? = nil,
+        note: String? = nil
+    ) throws -> ShoppingListItem? {
+        let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return nil }
+        let key = TextNormalizer.key(trimmed)
+        let open = try shoppingItems().filter { !$0.isChecked }
+        if let existing = open.first(where: { entry in
+            if let product, entry.product?.id == product.id { return true }
+            return TextNormalizer.key(entry.name) == key
+        }) {
+            return existing
+        }
+        let entry = ShoppingListItem(name: trimmed, quantity: quantity, unit: unit, reason: reason, note: note, now: now())
+        context.insert(entry)
+        entry.product = product
+        try context.save()
+        return entry
+    }
+
+    /// Adds predicted run-outs to the list.
+    func addSuggestions(_ suggestions: [ShoppingSuggestion]) throws {
+        for suggestion in suggestions {
+            try addToShoppingList(
+                name: suggestion.name,
+                quantity: suggestion.quantity,
+                unit: suggestion.unit,
+                reason: .predicted,
+                product: try product(id: suggestion.productID)
+            )
+        }
+    }
+
+    func setChecked(_ entry: ShoppingListItem, _ isChecked: Bool) throws {
+        entry.isChecked = isChecked
+        entry.checkedAt = isChecked ? now() : nil
+        try context.save()
+    }
+
+    func deleteShoppingItem(_ entry: ShoppingListItem) throws {
+        context.delete(entry)
+        try context.save()
+    }
+
+    func clearCheckedShoppingItems() throws {
+        for entry in try shoppingItems() where entry.isChecked {
+            context.delete(entry)
+        }
+        try context.save()
     }
 
     // MARK: - Data management
@@ -407,6 +512,9 @@ struct InventoryStore {
                 )
                 item.initialQuantity = stock.initialQuantity
                 item.status = QuickActionCalculator.status(forQuantity: stock.quantity, initialQuantity: stock.initialQuantity)
+                if stock.quantity < stock.initialQuantity {
+                    item.quantityObservedAt = today
+                }
                 context.insert(item)
                 item.product = product
                 item.location = locationsByKind[sample.location]
@@ -435,6 +543,9 @@ struct InventoryStore {
         }
         for receipt in try context.fetch(FetchDescriptor<Receipt>()) {
             context.delete(receipt)
+        }
+        for entry in try context.fetch(FetchDescriptor<ShoppingListItem>()) {
+            context.delete(entry)
         }
         try context.save()
     }

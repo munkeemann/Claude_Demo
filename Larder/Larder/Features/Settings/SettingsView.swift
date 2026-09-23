@@ -13,6 +13,8 @@ struct SettingsView: View {
             Form {
                 ClaudeSettingsSection()
 
+                RemindersSettingsSection()
+
                 Section("Inventory") {
                     NavigationLink {
                         LocationsSettingsView()

@@ -87,6 +87,43 @@ environment.
    the next scan. Claude's shelf-life estimate becomes the item's estimated expiry and fills the
    product's shelf-life override for that climate if it was empty.
 
+## Forecasting (Phase 3)
+
+**Expiry.** An item's expiry comes from the first available source:
+1. a date the user set (`expiryIsOverride`, never re-estimated)
+2. the product's own shelf life for the item's climate (set by the user, or learned from Claude's
+   receipt suggestion)
+3. `ShelfLifeTable` by category and climate
+
+Moving an item to a location with a different climate re-estimates it.
+
+**Run-out.** `RunOutForecaster` turns a product's history into a daily consumption rate. It draws
+rate observations from three sources:
+- "used up" events: purchase-to-finish time, at triple weight
+- repeat-purchase intervals: quantity bought ÷ days until the next purchase
+- partial-use logs: one aggregate observation
+
+The rate calculation:
+- Recent observations weigh more (×0.75 per step back).
+- Observations outside ⅓–3× the median are dropped.
+- The weighted mean is the rate. Its coefficient of variation sets the confidence: high for 4+
+  observations with CV ≤ 0.35, medium for 2+ observations with CV ≤ 0.6, low otherwise.
+- With no observations, the category's typical days-per-purchase is used at low confidence.
+
+Remaining stock is projected forward from when its quantity was last observed
+(`quantityObservedAt`). That gives a run-out date with an earliest/latest range.
+
+**Shopping list.** `ShoppingListGenerator` suggests products predicted to run out within the
+look-ahead window (at medium confidence or better, or already marked low), plus regular purchases
+that are probably out. It suggests the usual purchase amount.
+
+**Notifications.** iOS keeps only 64 pending local notifications. `NotificationPlanner` therefore
+merges reminders that fall on the same day into one notification, schedules at most 60, and skips
+reminders whose time has passed (the Soon tab covers those). The plan is recomputed:
+- when the app becomes active or goes to the background
+- in a `BGAppRefreshTask` (`com.example.larder.refresh`)
+- whenever reminder settings change
+
 ## Data model (SwiftData, CloudKit-ready)
 
 CloudKit compatibility rules, applied from day one:
@@ -106,7 +143,7 @@ CloudKit compatibility rules, applied from day one:
 | `PurchaseEvent` | An append-only purchase log: quantity, price in cents, currency, source, store, and receipt / external order ID. |
 | `UsageEvent` | An append-only usage log: used up / partially used / discarded. Every quick action writes one. |
 | `Receipt` | Raw OCR text and metadata for a scanned receipt (Phase 2). |
-| `ShoppingListItem` | Shopping list entries, with a reason: predicted run-out, recipe, or manual (Phase 3). |
+| `ShoppingListItem` | Shopping list entries, with a reason: predicted run-out, recipe, or manual. Optionally linked to a product. |
 | `SavedRecipe` | Favorite and cooked recipes (Phase 4). |
 
 Household sharing: SwiftData's built-in CloudKit sync covers the private database only. Sharing

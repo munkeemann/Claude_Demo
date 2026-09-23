@@ -15,6 +15,10 @@ final class InventoryItem {
     /// True when the user set the expiry date; estimates never overwrite it.
     var expiryIsOverride: Bool = false
     var openedDate: Date?
+    /// When `quantity` was last known to be accurate (a quick action or a
+    /// quantity edit). Forecasts project consumption from here; nil means
+    /// the purchase date.
+    var quantityObservedAt: Date?
     var statusRaw: String = "inStock"
     var notes: String = ""
     var createdAt: Date = Date()

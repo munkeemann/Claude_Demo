@@ -39,6 +39,9 @@ final class Product {
     @Relationship(deleteRule: .cascade, inverse: \ProductAlias.product)
     var aliases: [ProductAlias]? = []
 
+    @Relationship(deleteRule: .nullify, inverse: \ShoppingListItem.product)
+    var shoppingItems: [ShoppingListItem]? = []
+
     init(name: String, brand: String? = nil, category: ProductCategory, now: Date = Date()) {
         self.id = UUID()
         self.name = name
@@ -69,6 +72,15 @@ final class Product {
 
     var displayName: String {
         name.isEmpty ? "Unnamed product" : name
+    }
+
+    /// Shelf-life override for a climate, if one is set.
+    func shelfLifeDays(for climate: StorageClimate) -> Int? {
+        switch climate {
+        case .room: shelfLifeRoomDays
+        case .fridge: shelfLifeFridgeDays
+        case .freezer: shelfLifeFreezerDays
+        }
     }
 
     var barcodes: [String] {

@@ -7,6 +7,7 @@ struct ItemDetailView: View {
     @Environment(\.modelContext) private var modelContext
     @State private var editor: EditorSheet?
     @State private var isUsingSome = false
+    @State private var addedToList = false
     @State private var errorMessage: String?
 
     var body: some View {
@@ -69,6 +70,10 @@ struct ItemDetailView: View {
                 Button { editor = .add(item.restockDraft()) } label: {
                     Label("Buy again", systemImage: "arrow.clockwise")
                 }
+                Button { addToShoppingList() } label: {
+                    Label(addedToList ? "On shopping list" : "Add to shopping list", systemImage: addedToList ? "checkmark" : "cart.badge.plus")
+                }
+                .disabled(addedToList)
             }
 
             if !history.isEmpty {
@@ -106,6 +111,20 @@ struct ItemDetailView: View {
         let purchases = (product.purchases ?? []).map(HistoryEntry.init(purchase:))
         let usages = (product.usages ?? []).map(HistoryEntry.init(usage:))
         return (purchases + usages).sorted { $0.date > $1.date }.prefix(25).map { $0 }
+    }
+
+    private func addToShoppingList() {
+        do {
+            try InventoryStore(context: modelContext).addToShoppingList(
+                name: item.displayName,
+                quantity: item.initialQuantity,
+                unit: item.unit,
+                product: item.product
+            )
+            addedToList = true
+        } catch {
+            errorMessage = error.localizedDescription
+        }
     }
 
     private func apply(_ action: QuickAction) {
