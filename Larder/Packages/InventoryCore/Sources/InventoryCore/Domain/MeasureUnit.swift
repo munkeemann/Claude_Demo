@@ -88,7 +88,9 @@ public enum MeasureUnit: String, CaseIterable, Codable, Sendable, Identifiable {
         switch self {
         case .each:
             return number
-        case .pack, .box, .bag, .bottle, .can, .jar, .roll, .cup, .dozen:
+        case .dozen:
+            return "\(number) dozen"
+        case .pack, .box, .bag, .bottle, .can, .jar, .roll, .cup:
             let plural = value == 1 ? rawValue : (self == .box ? "boxes" : rawValue + "s")
             return "\(number) \(plural)"
         default:

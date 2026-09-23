@@ -8,7 +8,7 @@ struct SmokeTests {
         #expect(!ProductCategory.allCases.isEmpty)
     }
 
-    @Test func appVersionIsReadable() {
+    @Test @MainActor func appVersionIsReadable() {
         #expect(!SettingsView.appVersion.isEmpty)
     }
 }

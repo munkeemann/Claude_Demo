@@ -23,4 +23,6 @@ struct RootView: View {
 
 #Preview {
     RootView()
+        .modelContainer(PreviewSupport.container)
+        .environment(AppEnvironment.preview())
 }
