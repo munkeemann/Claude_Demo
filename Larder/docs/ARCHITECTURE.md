@@ -124,6 +124,30 @@ reminders whose time has passed (the Soon tab covers those). The plan is recompu
 - in a `BGAppRefreshTask` (`com.example.larder.refresh`)
 - whenever reminder settings change
 
+## Recipes (Phase 4)
+
+1. **Request.** `InventoryStore.recipeRequest` collects in-stock items whose product is an
+   ingredient. It sorts them soonest-expiring first, gives each a short prompt id (`i1`, `i2`, …)
+   and caps the list at 80.
+2. **Prompt.** `RecipePrompt` has a stable system prompt and a user message listing
+   `id | item | amount | expires`, followed by the filters: meal type, max time, allowed missing
+   ingredients, whether staples are assumed, and free-text preferences. The response is structured
+   output against `RecipePrompt.schema` (title, summary, meal type, minutes, servings, ingredients
+   with `inventoryItemId`/`have`/`isStaple`, steps).
+3. **Local verification.** `IngredientMatcher` decides availability itself. An ingredient is in
+   the inventory if Claude referenced a valid id, or if its name matches an item word-for-word
+   (plurals folded, descriptors like "fresh" ignored, "garlic cloves" matches "Garlic",
+   "spaghetti squash" does not match "Spaghetti"). Staples count only when assumed. A `have: true`
+   with no match is treated as missing.
+4. **Ranking.** `RecipeRanking` re-applies the missing-ingredient and time filters. Recipes that
+   use expiring items come first, then those with fewer missing ingredients, then the faster ones.
+5. **Actions.** One tap adds missing ingredients to the shopping list (reason `recipe`, with the
+   recipe title as a note). "I cooked this" suggests how much of each item was used, via
+   `CookedUsagePlanner` (converts "2 cups" to gallons, "6" eggs to 0.5 dozen, and so on). After
+   the user confirms, it logs `usedSome` usage events that feed the forecasts. Favorites and
+   cooked history are stored as `SavedRecipe`, as JSON with the prompt ids stripped so they are
+   re-matched against current stock.
+
 ## Data model (SwiftData, CloudKit-ready)
 
 CloudKit compatibility rules, applied from day one:
@@ -144,7 +168,7 @@ CloudKit compatibility rules, applied from day one:
 | `UsageEvent` | An append-only usage log: used up / partially used / discarded. Every quick action writes one. |
 | `Receipt` | Raw OCR text and metadata for a scanned receipt (Phase 2). |
 | `ShoppingListItem` | Shopping list entries, with a reason: predicted run-out, recipe, or manual. Optionally linked to a product. |
-| `SavedRecipe` | Favorite and cooked recipes (Phase 4). |
+| `SavedRecipe` | Favorite and cooked recipes, stored as JSON, with times cooked and last cooked date. |
 
 Household sharing: SwiftData's built-in CloudKit sync covers the private database only. Sharing
 across Apple IDs needs `CKShare`. The plan is to add a `CKSyncEngine` layer later. Stable UUIDs,

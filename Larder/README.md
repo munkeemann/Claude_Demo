@@ -31,13 +31,13 @@ Simulator offers manual barcode entry and receipt paste/import instead.
 
 ## Claude features
 
-Receipt scanning (and, later, recipe suggestions) call the Anthropic Messages API with your own
-key. In the app, open **Settings → Claude**, paste a key from
+Receipt scanning and recipe suggestions call the Anthropic Messages API with your own key. In the app, open **Settings → Claude**, paste a key from
 [console.anthropic.com](https://console.anthropic.com), and tap **Test Connection**. The key is
 stored in the iOS Keychain (this device only). The model picker defaults to Claude Opus 5.
 
-Without a key you can still try **Scan Receipt → Try the Sample Receipt**, which shows a
-pre-computed result for the bundled sample receipt.
+Without a key you can still try **Scan Receipt → Try the Sample Receipt** and **Recipes → Suggest
+Recipes**. Both show pre-computed results for the bundled sample data (load it from
+**Settings → Load Sample Data**).
 
 ## Tests
 

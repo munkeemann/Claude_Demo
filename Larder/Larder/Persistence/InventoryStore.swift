@@ -547,6 +547,9 @@ struct InventoryStore {
         for entry in try context.fetch(FetchDescriptor<ShoppingListItem>()) {
             context.delete(entry)
         }
+        for saved in try context.fetch(FetchDescriptor<SavedRecipe>()) {
+            context.delete(saved)
+        }
         try context.save()
     }
 }

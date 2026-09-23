@@ -4,6 +4,7 @@ struct RootView: View {
     enum Tab: Hashable {
         case inventory
         case soon
+        case recipes
         case shopping
         case settings
     }
@@ -19,6 +20,10 @@ struct RootView: View {
             SoonView()
                 .tabItem { Label("Soon", systemImage: "clock.badge.exclamationmark") }
                 .tag(Tab.soon)
+
+            RecipesView()
+                .tabItem { Label("Recipes", systemImage: "fork.knife") }
+                .tag(Tab.recipes)
 
             ShoppingListView()
                 .tabItem { Label("Shopping", systemImage: "cart") }
