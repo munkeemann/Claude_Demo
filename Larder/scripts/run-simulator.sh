@@ -15,6 +15,7 @@
 # Options:
 #   --no-gui   skip opening Simulator.app and Xcode (used by CI)
 set -euo pipefail
+trap 'echo "run-simulator.sh stopped at line $LINENO: $BASH_COMMAND" >&2' ERR
 
 OPEN_GUI=1
 for arg in "$@"; do
@@ -35,7 +36,14 @@ if ! command -v xcodebuild >/dev/null 2>&1; then
   echo "xcodebuild not found. Install Xcode from the App Store first." >&2
   exit 1
 fi
-XCODE_VERSION="$(xcodebuild -version | head -1 | awk '{print $2}')"
+# Capture the whole output first; piping into `head` can end xcodebuild
+# with SIGPIPE, which `pipefail` turns into a silent exit.
+if ! XCODE_INFO="$(xcodebuild -version 2>&1)"; then
+  echo "$XCODE_INFO" >&2
+  echo "Xcode isn't ready. Open Xcode once to finish setup, or run: sudo xcode-select -s /Applications/Xcode.app" >&2
+  exit 1
+fi
+XCODE_VERSION="$(printf '%s\n' "$XCODE_INFO" | awk 'NR == 1 { print $2 }')"
 echo "Xcode $XCODE_VERSION"
 if [ "${XCODE_VERSION%%.*}" -lt 16 ]; then
   echo "Larder needs Xcode 16 or newer." >&2
