@@ -29,7 +29,8 @@ struct InventoryStoreTests {
         try store.seedLocationsIfNeeded()
         let locations = try store.locations()
         #expect(locations.map(\.kind) == LocationKind.builtIn)
-        #expect(locations.allSatisfy(\.isBuiltIn))
+        let allBuiltIn = locations.allSatisfy(\.isBuiltIn)
+        #expect(allBuiltIn)
         #expect(locations.first { $0.kind == .freezer }?.climate == .freezer)
     }
 

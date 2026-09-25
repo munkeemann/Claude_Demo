@@ -46,7 +46,8 @@ struct ReceiptImportTests {
         #expect(try fetchAll(Product.self).count == 13)
         let purchases = try fetchAll(PurchaseEvent.self)
         #expect(purchases.count == 13)
-        #expect(purchases.allSatisfy { $0.source == .receipt && $0.storeName == "Walmart" && $0.receipt != nil })
+        let allFromReceipt = purchases.allSatisfy { $0.source == .receipt && $0.storeName == "Walmart" && $0.receipt != nil }
+        #expect(allFromReceipt)
         #expect(purchases.compactMap(\.priceCents).reduce(0, +) == 8482)
 
         let receipt = try #require(try fetchAll(Receipt.self).first)
@@ -90,7 +91,8 @@ struct ReceiptImportTests {
     @Test func secondImportReusesProducts() throws {
         try store.importReceipt(try makeReview())
         let secondReview = try makeReview()
-        #expect(secondReview.lines.allSatisfy { $0.origin == .remembered })
+        let allRemembered = secondReview.lines.allSatisfy { $0.origin == .remembered }
+        #expect(allRemembered)
         try store.importReceipt(secondReview)
 
         #expect(try fetchAll(Product.self).count == 13)

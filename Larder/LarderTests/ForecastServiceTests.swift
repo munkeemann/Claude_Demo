@@ -23,8 +23,8 @@ struct ForecastServiceTests {
         try #require(try store.locations().first { $0.kind == kind })
     }
 
-    func days(_ count: Int, from date: Date = Self.now) -> Date {
-        Calendar.current.date(byAdding: .day, value: count, to: date)!
+    func days(_ count: Int) -> Date {
+        Calendar.current.date(byAdding: .day, value: count, to: Self.now)!
     }
 
     // MARK: Expiry estimates
@@ -131,12 +131,14 @@ struct ForecastServiceTests {
         try store.loadSampleData()
         let suggestions = try service.shoppingSuggestions(horizonDays: 7)
         #expect(suggestions.contains { $0.name == "Whole Milk" })
-        #expect(suggestions.allSatisfy { $0.confidence >= .medium || $0.reason == .outOfStock })
+        let allConfident = suggestions.allSatisfy { $0.confidence >= .medium || $0.reason == .outOfStock }
+        #expect(allConfident)
 
         try store.addSuggestions(suggestions)
         let entries = try store.shoppingItems()
         #expect(entries.count == suggestions.count)
-        #expect(entries.allSatisfy { $0.reason == .predicted && $0.product != nil })
+        let allPredicted = entries.allSatisfy { $0.reason == .predicted && $0.product != nil }
+        #expect(allPredicted)
         #expect(try service.shoppingSuggestions(horizonDays: 7).isEmpty)
 
         try store.addSuggestions(suggestions)

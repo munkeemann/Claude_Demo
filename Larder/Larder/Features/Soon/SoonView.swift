@@ -100,7 +100,7 @@ struct SoonView: View {
 
     private func apply(_ action: QuickAction, to item: InventoryItem) {
         do {
-            try withAnimation { try store.apply(action, to: item) }
+            _ = try withAnimation { try store.apply(action, to: item) }
         } catch {
             errorMessage = error.localizedDescription
         }

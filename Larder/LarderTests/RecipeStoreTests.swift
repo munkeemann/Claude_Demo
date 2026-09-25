@@ -85,7 +85,8 @@ struct RecipeStoreTests {
         let saved = try #require(try store.savedRecipe(id: recipe.id))
         let decoded = try #require(saved.recipe)
         #expect(decoded.title == recipe.title)
-        #expect(decoded.ingredients.allSatisfy { $0.inventoryItemId == nil })
+        let noPromptIDs = decoded.ingredients.allSatisfy { $0.inventoryItemId == nil }
+        #expect(noPromptIDs)
 
         try store.setFavorite(recipe, false)
         #expect(try store.savedRecipe(id: recipe.id) == nil, "Never-cooked recipes are removed when unfavorited")
@@ -109,7 +110,8 @@ struct RecipeStoreTests {
             recipes.map { IngredientMatcher.evaluate($0, items: request.items, assumeStaples: true) },
             filters: filters
         )
-        #expect(ranked.allSatisfy { $0.missingCount <= 1 })
+        let withinMissingLimit = ranked.allSatisfy { $0.missingCount <= 1 }
+        #expect(withinMissingLimit)
         #expect(ranked.first?.expiringItemNames.isEmpty == false)
     }
 }
