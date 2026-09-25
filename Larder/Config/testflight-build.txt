@@ -1,2 +1,4 @@
-Changing this file on main or a claude/** branch uploads a new TestFlight build.
+Changing this file forces a TestFlight upload without a code change. Any
+other app change on main or a claude/** branch uploads one automatically
+once the tests pass.
 request: 6

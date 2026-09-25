@@ -43,8 +43,10 @@ After pulling new changes, run `Larder/scripts/run-simulator.sh` again from the 
 
 ## Install on your iPhone (TestFlight)
 
-The **Larder TestFlight** workflow (`.github/workflows/larder-testflight.yml`) builds a release,
-signs it with Apple's cloud-managed certificate and uploads it to TestFlight, so no Mac is needed.
+Builds reach TestFlight automatically. Every push to `main` or a `claude/**` branch that changes
+the app runs the **Larder iOS** workflow (`.github/workflows/larder-ios.yml`) on GitHub's macOS
+runners. When the tests pass, its **Upload to TestFlight** job archives a release build, signs it
+with Apple's cloud-managed certificate and uploads it. No Mac is needed at any point.
 
 One-time setup:
 1. In App Store Connect → Apps → **+ New App**, create "Larder" with bundle ID
@@ -56,13 +58,14 @@ One-time setup:
 
    All three come from the App Store Connect API key (Users and Access → Integrations). Cloud
    signing needs a key with the Admin role.
+3. In App Store Connect → TestFlight, create an **Internal Testing** group with automatic
+   distribution on, and add the testers. In the TestFlight app on each phone, turn on
+   **Automatic Updates** for Larder.
 
-Each build: bump the number in `Larder/Config/testflight-build.txt` and push, or push a tag named
-`larder-testflight-<anything>`. Once the workflow is on the default branch, you can also use
-**Run workflow** instead. After Apple finishes processing, install
-the build from the TestFlight app. The build number is the workflow run number, so it always
-increases.
-
+After a push, a build shows up in TestFlight about 30–45 minutes later (tests, upload, then Apple's
+processing). Docs-only changes don't upload a build. To upload one without a code change, bump the
+number in `Larder/Config/testflight-build.txt` and push. The build number is the workflow run
+number, so it always increases.
 
 ```sh
 cd Larder
