@@ -26,6 +26,7 @@ public enum PurchaseSource: String, CaseIterable, Codable, Sendable {
     case barcode
     case email
     case manual
+    case shelfScan
 }
 
 /// What happened when an item was consumed.

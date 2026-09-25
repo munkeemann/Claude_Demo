@@ -109,10 +109,24 @@ public struct AnthropicClient: Sendable {
         schema: JSONValue,
         maxTokens: Int = 16_000
     ) async throws -> Output {
+        try await structuredOutput(type, model: model, system: system, userContent: .string(user), schema: schema, maxTokens: maxTokens)
+    }
+
+    /// Like `structuredOutput(_:model:system:user:schema:maxTokens:)`, with
+    /// the user message given as content blocks (for example an image
+    /// followed by text).
+    public func structuredOutput<Output: Decodable>(
+        _ type: Output.Type,
+        model: ClaudeModel,
+        system: String,
+        userContent: JSONValue,
+        schema: JSONValue,
+        maxTokens: Int = 16_000
+    ) async throws -> Output {
         let response = try await createMessage(
             model: model,
             system: system,
-            user: user,
+            userContent: userContent,
             outputSchema: schema,
             maxTokens: maxTokens
         )
@@ -134,11 +148,23 @@ public struct AnthropicClient: Sendable {
         outputSchema: JSONValue? = nil,
         maxTokens: Int = 16_000
     ) async throws -> MessagesResponse {
+        try await createMessage(model: model, system: system, userContent: .string(user), outputSchema: outputSchema, maxTokens: maxTokens)
+    }
+
+    /// Sends a single-turn request whose user content is a string or an
+    /// array of content blocks, and validates the stop reason.
+    public func createMessage(
+        model: ClaudeModel,
+        system: String,
+        userContent: JSONValue,
+        outputSchema: JSONValue? = nil,
+        maxTokens: Int = 16_000
+    ) async throws -> MessagesResponse {
         var body: [String: JSONValue] = [
             "model": .string(model.rawValue),
             "max_tokens": .integer(maxTokens),
             "system": .string(system),
-            "messages": [["role": "user", "content": .string(user)]],
+            "messages": [["role": "user", "content": userContent]],
         ]
         if let outputSchema {
             body["output_config"] = ["format": ["type": "json_schema", "schema": outputSchema]]
@@ -251,6 +277,27 @@ public struct AnthropicClient: Sendable {
         case 529: return .overloaded
         default: return .server(status: status, message: message)
         }
+    }
+}
+
+// MARK: - Content blocks
+
+public enum ContentBlock {
+    /// A base64 image block. Claude reads images best when they come before
+    /// the text that asks about them.
+    public static func image(_ data: Data, mediaType: String = "image/jpeg") -> JSONValue {
+        [
+            "type": "image",
+            "source": [
+                "type": "base64",
+                "media_type": .string(mediaType),
+                "data": .string(data.base64EncodedString()),
+            ],
+        ]
+    }
+
+    public static func text(_ text: String) -> JSONValue {
+        ["type": "text", "text": .string(text)]
     }
 }
 

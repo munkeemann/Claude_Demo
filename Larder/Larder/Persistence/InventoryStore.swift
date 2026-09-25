@@ -179,14 +179,16 @@ struct InventoryStore {
         return item
     }
 
-    /// Inserts an item plus its purchase event. Does not save.
+    /// Inserts an item plus, unless `logsPurchase` is false (stock that was
+    /// already in the house), its purchase event. Does not save.
     private func insertStock(
         from draft: ItemDraft,
         product: Product,
         source: PurchaseSource,
         storeName: String? = nil,
         receipt: Receipt? = nil,
-        currencyCode: String? = nil
+        currencyCode: String? = nil,
+        logsPurchase: Bool = true
     ) throws -> InventoryItem {
         let item = InventoryItem(
             quantity: draft.quantity,
@@ -214,6 +216,7 @@ struct InventoryStore {
             applyEstimatedExpiry(to: item)
         }
 
+        guard logsPurchase else { return item }
         let purchase = PurchaseEvent(
             date: draft.purchaseDate,
             quantity: draft.quantity,
@@ -300,6 +303,60 @@ struct InventoryStore {
         }
         try context.save()
         return items
+    }
+
+    // MARK: - Shelf scans
+
+    /// In-stock items at a location, with short references for Claude.
+    func shelfScanHints(locationID: UUID?) throws -> [ShelfScanHint] {
+        let items = try context.fetch(FetchDescriptor<InventoryItem>())
+            .filter { $0.status.isActive && $0.location?.id == locationID }
+            .sorted { ($0.displayName, $0.purchaseDate) < ($1.displayName, $1.purchaseDate) }
+        return ShelfScanPrompt.hints(for: items.map { item in
+            (id: item.id, name: item.displayName, brand: item.product?.brand, quantity: item.quantity, initialQuantity: item.initialQuantity, unit: item.unit)
+        })
+    }
+
+    /// Applies a reviewed shelf scan:
+    /// - New products are added as stock. Only when the user says they were
+    ///   just bought is a purchase logged; otherwise they were already in
+    ///   the house and logging one would skew usage estimates.
+    /// - Tracked items get their new count, which pins the forecast's
+    ///   projection. A count that went up after shopping logs the increase
+    ///   as a purchase.
+    /// - Unseen items the user marked finished are closed.
+    func importShelfScan(_ review: ShelfScanReview) throws {
+        let lines = review.includedLines
+        guard lines.allSatisfy(\.isValid) else { throw InventoryStoreError.invalidDraft([.missingName]) }
+        let today = now()
+
+        for line in lines {
+            switch line.action {
+            case .add:
+                let draft = line.draft(locationID: review.locationID, date: today)
+                let product = try findOrCreateProduct(for: draft)
+                applyProductFields(from: draft, to: product)
+                let item = try insertStock(from: draft, product: product, source: .shelfScan, logsPurchase: review.justBought)
+                if let full = line.fullQuantity, full > line.quantity {
+                    item.initialQuantity = full
+                    item.status = QuickActionCalculator.status(forQuantity: line.quantity, initialQuantity: full)
+                }
+            case .update:
+                guard let id = line.matchedItemID, let item = try self.item(id: id) else { continue }
+                if review.justBought, line.increase > 0 {
+                    let purchase = PurchaseEvent(date: today, quantity: line.increase, unit: item.unit, source: .shelfScan, now: today)
+                    context.insert(purchase)
+                    purchase.product = item.product
+                }
+                setCount(item, to: line.quantity)
+            }
+        }
+        for unseen in review.unseen where unseen.markFinished {
+            if let item = try self.item(id: unseen.hint.itemID), item.status.isActive {
+                setCount(item, to: 0)
+            }
+        }
+        try context.save()
     }
 
     /// Applies edits from the item form. Quantity edits are corrections, so
@@ -399,10 +456,7 @@ struct InventoryStore {
     /// logged: the item ran out some time ago, not now, and purchases already
     /// carry the rate.
     func confirmFinished(_ item: InventoryItem) throws {
-        item.quantity = 0
-        item.status = .usedUp
-        item.quantityObservedAt = now()
-        item.updatedAt = now()
+        setCount(item, to: 0)
         try context.save()
     }
 
@@ -410,13 +464,18 @@ struct InventoryStore {
     /// some"). Like an edit, it's a correction, so no usage is logged, but it
     /// pins the forecast's projection for this item to now.
     func recount(_ item: InventoryItem, quantity: Double) throws {
+        setCount(item, to: quantity)
+        try context.save()
+    }
+
+    /// Sets a counted amount without saving. Zero means used up.
+    private func setCount(_ item: InventoryItem, to quantity: Double) {
         let counted = max(0, quantity)
         item.quantity = counted
         if counted > item.initialQuantity { item.initialQuantity = counted }
         item.status = QuickActionCalculator.status(forQuantity: counted, initialQuantity: item.initialQuantity)
         item.quantityObservedAt = now()
         item.updatedAt = now()
-        try context.save()
     }
 
     // MARK: - Shopping list

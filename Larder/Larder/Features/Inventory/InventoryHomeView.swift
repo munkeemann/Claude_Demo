@@ -12,6 +12,7 @@ struct InventoryHomeView: View {
     @State private var editor: EditorSheet?
     @State private var isScanning = false
     @State private var isScanningReceipt = false
+    @State private var isScanningShelf = false
     @State private var isShowingFilters = false
     @State private var useSomeItem: InventoryItem?
     @State private var recountItem: InventoryItem?
@@ -46,6 +47,9 @@ struct InventoryHomeView: View {
         .sheet(isPresented: $isScanningReceipt) {
             ReceiptScanFlow()
         }
+        .sheet(isPresented: $isScanningShelf) {
+            ShelfScanFlow()
+        }
         .sheet(item: $useSomeItem) { item in
             UseSomeSheet(item: item)
         }
@@ -70,10 +74,11 @@ struct InventoryHomeView: View {
                         .foregroundStyle(Theme.greenDeep)
                 }
             } description: {
-                Text("Add items by hand or scan a barcode. You can also load sample data to explore.")
+                Text("Photograph a shelf, scan a receipt or barcode, or add items by hand. You can also load sample data to explore.")
             } actions: {
                 Button("Add Item") { editor = .add(ItemDraft()) }
                     .buttonStyle(.borderedProminent)
+                Button("Scan a Shelf") { isScanningShelf = true }
                 Button("Scan Receipt") { isScanningReceipt = true }
                 Button("Scan Barcode") { isScanning = true }
                 Button("Load Sample Data") { perform { try store.loadSampleData() } }
@@ -186,6 +191,7 @@ struct InventoryHomeView: View {
         }
         ToolbarItem(placement: .primaryAction) {
             Menu {
+                Button { isScanningShelf = true } label: { Label("Scan a Shelf", systemImage: "camera.viewfinder") }
                 Button { isScanningReceipt = true } label: { Label("Scan Receipt", systemImage: "doc.text.viewfinder") }
                 Button { isScanning = true } label: { Label("Scan Barcode", systemImage: "barcode.viewfinder") }
                 Button { editor = .add(ItemDraft()) } label: { Label("Add Manually", systemImage: "square.and.pencil") }

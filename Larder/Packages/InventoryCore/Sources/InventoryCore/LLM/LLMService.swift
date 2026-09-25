@@ -10,6 +10,9 @@ public protocol LLMService: Sendable {
     /// Suggests recipes that use the given inventory.
     func suggestRecipes(_ request: RecipeRequest) async throws -> [Recipe]
 
+    /// Lists the products visible in a photo of a shelf, fridge or cupboard.
+    func scanShelf(_ input: ShelfScanInput) async throws -> ShelfScanResult
+
     /// Confirms the service is usable (for example, that the API key works).
     func verify() async throws
 }
@@ -50,6 +53,22 @@ public struct AnthropicLLMService: LLMService {
         return response.recipes
     }
 
+    public func scanShelf(_ input: ShelfScanInput) async throws -> ShelfScanResult {
+        guard !input.image.isEmpty else { return ShelfScanResult(items: []) }
+        // Image first, then the question: Claude reads images best that way.
+        let content: JSONValue = [
+            ContentBlock.image(input.image),
+            ContentBlock.text(ShelfScanPrompt.userText(for: input)),
+        ]
+        return try await client.structuredOutput(
+            ShelfScanResult.self,
+            model: model(),
+            system: ShelfScanPrompt.system,
+            userContent: content,
+            schema: ShelfScanSchema.schema
+        )
+    }
+
     public func verify() async throws {
         try await client.verify(model: model())
     }
@@ -59,15 +78,18 @@ public struct AnthropicLLMService: LLMService {
 public struct MockLLMService: LLMService {
     public var receipt: ReceiptExtraction
     public var recipes: [Recipe]
+    public var shelf: ShelfScanResult
     public var delay: TimeInterval
 
     public init(
         receipt: ReceiptExtraction = SampleReceipt.extraction,
         recipes: [Recipe] = SampleRecipes.recipes,
+        shelf: ShelfScanResult = SampleShelfScan.result,
         delay: TimeInterval = 0
     ) {
         self.receipt = receipt
         self.recipes = recipes
+        self.shelf = shelf
         self.delay = delay
     }
 
@@ -79,6 +101,11 @@ public struct MockLLMService: LLMService {
     public func suggestRecipes(_ request: RecipeRequest) async throws -> [Recipe] {
         if delay > 0 { try await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000)) }
         return recipes
+    }
+
+    public func scanShelf(_ input: ShelfScanInput) async throws -> ShelfScanResult {
+        if delay > 0 { try await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000)) }
+        return shelf
     }
 
     public func verify() async throws {}
