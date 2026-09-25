@@ -79,6 +79,27 @@ struct ForecastServiceTests {
         #expect(item.status == .usedUp)
     }
 
+    // MARK: Toss reminders
+
+    @Test func expiredItemsAreCountedAndCarryTheirIDs() throws {
+        let fridge = try location(.fridge).id
+        let old = try store.addItem(
+            from: ItemDraft(name: "Yogurt", category: .dairy, locationID: fridge, purchaseDate: days(-10), expiryDate: days(-2)),
+            source: .manual
+        )
+        try store.addItem(
+            from: ItemDraft(name: "Cheddar", category: .cheese, locationID: fridge, purchaseDate: Self.now, expiryDate: days(20)),
+            source: .manual
+        )
+        #expect(try service.expiredItemCount() == 1)
+        let events = try service.upcomingEvents().filter { $0.kind == .expires }
+        let yogurt = try #require(events.first { $0.name == "Yogurt" })
+        #expect(yogurt.itemID == old.id)
+
+        try store.apply(.tossed, to: old)
+        #expect(try service.expiredItemCount() == 0)
+    }
+
     // MARK: Expiry estimates
 
     @Test func addingPerishableEstimatesExpiryFromClimate() throws {

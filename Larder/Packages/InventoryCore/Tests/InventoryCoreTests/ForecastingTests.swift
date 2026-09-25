@@ -457,8 +457,69 @@ struct NotificationPlannerTests {
         Self.calendar.date(byAdding: .day, value: offset, to: Self.calendar.date(bySettingHour: hour, minute: 0, second: 0, of: Self.now)!)!
     }
 
-    func plan(_ events: [UpcomingEvent], settings: NotificationSettings = NotificationSettings()) -> [PlannedNotification] {
+    /// Heads-up reminders only, unless a test turns toss reminders on.
+    func plan(_ events: [UpcomingEvent], settings: NotificationSettings = NotificationSettings(tossRemindersEnabled: false)) -> [PlannedNotification] {
         NotificationPlanner.plan(events: events, settings: settings, now: Self.now, calendar: Self.calendar)
+    }
+
+    // MARK: Toss reminders
+
+    let tossOn = NotificationSettings(tossRemindersEnabled: true, tossHour: 18)
+
+    @Test func tossReminderFiresTheEveningAfterTheDate() throws {
+        let milk = UUID()
+        let result = plan([UpcomingEvent(name: "Milk", date: day(3, hour: 0), kind: .expires, itemID: milk)], settings: tossOn)
+        let toss = try #require(result.first { $0.kind == .toss })
+        #expect(toss.fireDate == Self.calendar.date(from: DateComponents(year: 2026, month: 9, day: 27, hour: 18)))
+        #expect(toss.id == "larder.reminder.2026-09-27.toss")
+        #expect(toss.title == "Past its date: Milk")
+        #expect(toss.body == "It expired yesterday. Toss it next time you're in the kitchen.")
+        #expect(toss.itemIDs == [milk])
+        #expect(toss.badge == 1)
+        // The heads-up reminder is separate and keeps its own ID.
+        let headsUp = try #require(result.first { $0.kind == .headsUp })
+        #expect(headsUp.id == "larder.reminder.2026-09-24")
+    }
+
+    @Test func sameEveningTossesGroupAndCountTheBadge() throws {
+        let result = plan([
+            UpcomingEvent(name: "Milk", date: day(2), kind: .expires, itemID: UUID()),
+            UpcomingEvent(name: "Spinach", date: day(2, hour: 8), kind: .expires, itemID: UUID()),
+            UpcomingEvent(name: "Yogurt", date: day(-1), kind: .expires, itemID: UUID()),
+        ], settings: tossOn)
+        let tosses = result.filter { $0.kind == .toss }
+        let evening = try #require(tosses.first { $0.id == "larder.reminder.2026-09-26.toss" })
+        #expect(evening.title == "2 items are past their date")
+        #expect(evening.body == "Spinach and Milk expired. Toss them next time you're in the kitchen.")
+        #expect(evening.itemIDs.count == 2)
+        // Yogurt expired too, and hasn't been tossed yet.
+        #expect(evening.badge == 3)
+    }
+
+    @Test func recentlyExpiredItemsGetTheNextTossTime() throws {
+        // Expired 3 days ago; its own toss evening has passed. Noon now, so tonight.
+        let result = plan([UpcomingEvent(name: "Bread", date: day(-3), kind: .expires)], settings: tossOn)
+        let toss = try #require(result.first)
+        #expect(toss.kind == .toss)
+        #expect(toss.fireDate == Self.calendar.date(from: DateComponents(year: 2026, month: 9, day: 23, hour: 18)))
+        #expect(toss.body == "It expired 3 days ago. Toss it next time you're in the kitchen.")
+    }
+
+    @Test func longExpiredItemsStopNagging() {
+        let result = plan([UpcomingEvent(name: "Mustard", date: day(-20), kind: .expires)], settings: tossOn)
+        #expect(result.isEmpty)
+    }
+
+    @Test func tossTimeAfterNowRollsToTomorrow() throws {
+        let morning = NotificationSettings(tossRemindersEnabled: true, tossHour: 8)
+        let result = plan([UpcomingEvent(name: "Bread", date: day(-2), kind: .expires)], settings: morning)
+        let toss = try #require(result.first)
+        #expect(toss.fireDate == Self.calendar.date(from: DateComponents(year: 2026, month: 9, day: 24, hour: 8)))
+    }
+
+    @Test func runOutsNeverMakeTossReminders() {
+        let result = plan([UpcomingEvent(name: "Coffee", date: day(-1), kind: .runsOut)], settings: tossOn)
+        #expect(result.isEmpty)
     }
 
     @Test func firesLeadDaysBeforeAtTheConfiguredHour() throws {
@@ -496,7 +557,7 @@ struct NotificationPlannerTests {
     }
 
     @Test func respectsLeadTimesAndHourSettings() throws {
-        let settings = NotificationSettings(expiryLeadDays: 1, runOutLeadDays: 5, hour: 18)
+        let settings = NotificationSettings(expiryLeadDays: 1, runOutLeadDays: 5, hour: 18, tossRemindersEnabled: false)
         let result = plan([
             UpcomingEvent(name: "Milk", date: day(3), kind: .expires),
             UpcomingEvent(name: "Coffee", date: day(9), kind: .runsOut),

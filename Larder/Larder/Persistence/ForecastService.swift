@@ -98,6 +98,17 @@ struct ForecastService {
             .sorted { ($0.expiryDate ?? .distantFuture) < ($1.expiryDate ?? .distantFuture) }
     }
 
+    /// In-stock items past their date, for the app icon badge.
+    func expiredItemCount() throws -> Int {
+        let today = now()
+        return try context.fetch(FetchDescriptor<InventoryItem>())
+            .filter { item in
+                guard item.status.isActive, let expiry = item.expiryDate else { return false }
+                return ExpiryStatus(expiry: expiry, now: today).urgency == .expired
+            }
+            .count
+    }
+
     /// Suggestions not already on the unchecked shopping list.
     func shoppingSuggestions(horizonDays: Double) throws -> [ShoppingSuggestion] {
         let onList = Set(
@@ -120,7 +131,7 @@ struct ForecastService {
             .filter { $0.status.isActive && ($0.product?.tracksExpiry ?? false) }
             .compactMap { item -> UpcomingEvent? in
                 guard let expiry = item.expiryDate, expiry < horizon else { return nil }
-                return UpcomingEvent(name: item.displayName, date: expiry, kind: .expires)
+                return UpcomingEvent(name: item.displayName, date: expiry, kind: .expires, itemID: item.id)
             }
         let runningOut = try productForecasts()
             .filter { !$0.forecast.isOutOfStock && $0.forecast.runOutDate < horizon }

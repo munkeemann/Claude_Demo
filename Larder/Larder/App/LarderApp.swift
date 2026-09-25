@@ -4,17 +4,14 @@ import SwiftUI
 @main
 @MainActor
 struct LarderApp: App {
+    @UIApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
     private let container: ModelContainer
     @State private var environment = AppEnvironment.live()
     @Environment(\.scenePhase) private var scenePhase
 
     init() {
         Theme.applyAppearance()
-        do {
-            container = try Persistence.makeContainer()
-        } catch {
-            fatalError("Could not open the Larder database: \(error)")
-        }
+        container = AppContainer.shared
         do {
             let store = InventoryStore(context: container.mainContext)
             try store.seedLocationsIfNeeded()

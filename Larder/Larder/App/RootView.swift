@@ -9,10 +9,10 @@ struct RootView: View {
         case settings
     }
 
-    @State private var selection: Tab = .inventory
+    @Bindable private var router = AppRouter.shared
 
     var body: some View {
-        TabView(selection: $selection) {
+        TabView(selection: $router.selectedTab) {
             InventoryHomeView()
                 .tabItem { Label("Inventory", systemImage: "cabinet") }
                 .tag(Tab.inventory)

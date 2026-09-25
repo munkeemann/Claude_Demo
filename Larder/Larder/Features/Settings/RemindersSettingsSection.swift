@@ -8,6 +8,8 @@ struct RemindersSettingsSection: View {
     @AppStorage(ReminderPreferences.expiryLeadKey) private var expiryLeadDays = 2
     @AppStorage(ReminderPreferences.runOutLeadKey) private var runOutLeadDays = 3
     @AppStorage(ReminderPreferences.hourKey) private var hour = 9
+    @AppStorage(ReminderPreferences.tossEnabledKey) private var tossEnabled = true
+    @AppStorage(ReminderPreferences.tossHourKey) private var tossHour = 18
     @AppStorage(ReminderPreferences.horizonKey) private var horizonDays = 7
     @State private var permissionDenied = false
 
@@ -39,6 +41,21 @@ struct RemindersSettingsSection: View {
                         Text(hourLabel(hour)).tag(hour)
                     }
                 }
+                Toggle(isOn: $tossEnabled) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Toss reminders")
+                        Text("When something passes its date")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+                if tossEnabled {
+                    Picker("Toss reminder time", selection: $tossHour) {
+                        ForEach(6..<23, id: \.self) { hour in
+                            Text(hourLabel(hour)).tag(hour)
+                        }
+                    }
+                }
             }
 
             Picker("Look ahead", selection: $horizonDays) {
@@ -53,12 +70,14 @@ struct RemindersSettingsSection: View {
                 Text("Notifications are turned off for Larder. Enable them in the Settings app.")
                     .foregroundStyle(Theme.terracotta)
             } else {
-                Text("Reminders for the same day are combined into one notification. \"Look ahead\" sets how far the Soon tab and shopping suggestions look.")
+                Text("Reminders for the same day are combined into one notification. Toss reminders arrive the evening after an item's date, when you're likely in the kitchen, and \"Tossed them\" clears the items right from the notification. \"Look ahead\" sets how far the Soon tab and shopping suggestions look.")
             }
         }
         .onChange(of: expiryLeadDays) { _, _ in reschedule() }
         .onChange(of: runOutLeadDays) { _, _ in reschedule() }
         .onChange(of: hour) { _, _ in reschedule() }
+        .onChange(of: tossEnabled) { _, _ in reschedule() }
+        .onChange(of: tossHour) { _, _ in reschedule() }
     }
 
     private func dayCount(_ days: Int) -> String {
