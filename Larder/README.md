@@ -56,9 +56,9 @@ One-time setup:
    All three come from the App Store Connect API key (Users and Access → Integrations). Cloud
    signing needs a key with the Admin role.
 
-Each build: push a tag named `larder-testflight-<anything>`, for example
-`git tag larder-testflight-1 && git push origin larder-testflight-1`. Once the workflow is on the
-default branch, you can also use **Run workflow** instead. After Apple finishes processing, install
+Each build: bump the number in `Larder/Config/testflight-build.txt` and push, or push a tag named
+`larder-testflight-<anything>`. Once the workflow is on the default branch, you can also use
+**Run workflow** instead. After Apple finishes processing, install
 the build from the TestFlight app. The build number is the workflow run number, so it always
 increases.
 

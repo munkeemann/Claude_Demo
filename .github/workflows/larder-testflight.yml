@@ -4,8 +4,11 @@ name: Larder TestFlight
 # Apple's cloud-managed distribution certificate via an App Store Connect
 # API key, so no certificates or profiles are stored in the repo.
 #
-# Trigger: push a tag named larder-testflight-* (works from any branch), or
-# run manually once this workflow is on the default branch.
+# Triggers:
+#   - a change to Larder/Config/testflight-build.txt on main or a claude/**
+#     branch (bump the number in that file to ship a build)
+#   - a pushed tag named larder-testflight-*
+#   - Run workflow, once this file is on the default branch
 #
 # Required repository secrets:
 #   ASC_KEY_ID      App Store Connect API key ID
@@ -14,7 +17,9 @@ name: Larder TestFlight
 
 on:
   push:
+    branches: [main, "claude/**"]
     tags: ["larder-testflight-*"]
+    paths: ["Larder/Config/testflight-build.txt"]  # not evaluated for tags
   workflow_dispatch:
 
 concurrency:
