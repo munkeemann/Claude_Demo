@@ -1,2 +1,2 @@
 Changing this file on main or a claude/** branch uploads a new TestFlight build.
-request: 3
+request: 4
