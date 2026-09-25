@@ -27,7 +27,7 @@ done
 
 LARDER_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$LARDER_DIR"
-BUNDLE_ID="com.example.larder"
+BUNDLE_ID="com.munkeemann.larder"
 
 step() { printf '\n==> %s\n' "$1"; }
 

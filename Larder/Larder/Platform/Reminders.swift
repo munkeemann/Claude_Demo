@@ -20,7 +20,7 @@ enum Reminders {
 /// Periodic background refresh so reminders stay current even if the app
 /// isn't opened. The identifier is listed in Info.plist.
 enum BackgroundRefresh {
-    static let identifier = "com.example.larder.refresh"
+    static let identifier = "com.munkeemann.larder.refresh"
 
     static func schedule() {
         let request = BGAppRefreshTaskRequest(identifier: identifier)

@@ -40,7 +40,28 @@ The script:
 
 After pulling new changes, run `Larder/scripts/run-simulator.sh` again from the `Claude_Demo` folder.
 
-## Getting started
+## Install on your iPhone (TestFlight)
+
+The **Larder TestFlight** workflow (`.github/workflows/larder-testflight.yml`) builds a release,
+signs it with Apple's cloud-managed certificate and uploads it to TestFlight, so no Mac is needed.
+
+One-time setup:
+1. In App Store Connect → Apps → **+ New App**, create "Larder" with bundle ID
+   `com.munkeemann.larder`.
+2. Add three repository secrets under GitHub → Settings → Secrets and variables → Actions:
+   - `ASC_KEY_ID`: the key ID
+   - `ASC_ISSUER_ID`: the issuer ID
+   - `ASC_KEY_P8`: the full contents of the `.p8` file
+
+   All three come from the App Store Connect API key (Users and Access → Integrations). Cloud
+   signing needs a key with the Admin role.
+
+Each build: push a tag named `larder-testflight-<anything>`, for example
+`git tag larder-testflight-1 && git push origin larder-testflight-1`. Once the workflow is on the
+default branch, you can also use **Run workflow** instead. After Apple finishes processing, install
+the build from the TestFlight app. The build number is the workflow run number, so it always
+increases.
+
 
 ```sh
 cd Larder

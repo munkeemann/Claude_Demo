@@ -121,7 +121,7 @@ that are probably out. It suggests the usual purchase amount.
 merges reminders that fall on the same day into one notification, schedules at most 60, and skips
 reminders whose time has passed (the Soon tab covers those). The plan is recomputed:
 - when the app becomes active or goes to the background
-- in a `BGAppRefreshTask` (`com.example.larder.refresh`)
+- in a `BGAppRefreshTask` (`com.munkeemann.larder.refresh`)
 - whenever reminder settings change
 
 ## Recipes (Phase 4)

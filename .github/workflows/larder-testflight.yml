@@ -1,0 +1,95 @@
+name: Larder TestFlight
+
+# Builds a release archive and uploads it to TestFlight. Signing uses
+# Apple's cloud-managed distribution certificate via an App Store Connect
+# API key, so no certificates or profiles are stored in the repo.
+#
+# Trigger: push a tag named larder-testflight-* (works from any branch), or
+# run manually once this workflow is on the default branch.
+#
+# Required repository secrets:
+#   ASC_KEY_ID      App Store Connect API key ID
+#   ASC_ISSUER_ID   App Store Connect issuer ID
+#   ASC_KEY_P8      contents of the AuthKey_<id>.p8 file
+
+on:
+  push:
+    tags: ["larder-testflight-*"]
+  workflow_dispatch:
+
+concurrency:
+  group: larder-testflight
+  cancel-in-progress: false
+
+jobs:
+  testflight:
+    name: Archive and upload to TestFlight
+    runs-on: macos-15
+    timeout-minutes: 45
+    env:
+      ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+      ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+      ASC_KEY_P8: ${{ secrets.ASC_KEY_P8 }}
+      BUILD_NUMBER: ${{ github.run_number }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check secrets
+        run: |
+          missing=""
+          [ -n "$ASC_KEY_ID" ] || missing="$missing ASC_KEY_ID"
+          [ -n "$ASC_ISSUER_ID" ] || missing="$missing ASC_ISSUER_ID"
+          [ -n "$ASC_KEY_P8" ] || missing="$missing ASC_KEY_P8"
+          if [ -n "$missing" ]; then
+            echo "::error::Missing repository secrets:$missing (Settings → Secrets and variables → Actions)"
+            exit 1
+          fi
+
+      - name: Toolchain versions
+        run: xcodebuild -version
+
+      - name: Install XcodeGen and xcbeautify
+        run: brew install xcodegen xcbeautify
+
+      - name: Generate Xcode project
+        working-directory: Larder
+        run: xcodegen generate
+
+      - name: Write API key
+        run: |
+          mkdir -p "$RUNNER_TEMP/asc"
+          printf '%s\n' "$ASC_KEY_P8" > "$RUNNER_TEMP/asc/AuthKey.p8"
+          chmod 600 "$RUNNER_TEMP/asc/AuthKey.p8"
+
+      - name: Archive
+        working-directory: Larder
+        run: |
+          set -o pipefail
+          xcodebuild archive \
+            -project Larder.xcodeproj \
+            -scheme Larder \
+            -configuration Release \
+            -destination 'generic/platform=iOS' \
+            -archivePath "$RUNNER_TEMP/Larder.xcarchive" \
+            CODE_SIGNING_ALLOWED=NO \
+            CURRENT_PROJECT_VERSION="$BUILD_NUMBER" \
+            | xcbeautify --renderer github-actions
+
+      - name: Sign and upload to App Store Connect
+        working-directory: Larder
+        run: |
+          set -o pipefail
+          xcodebuild -exportArchive \
+            -archivePath "$RUNNER_TEMP/Larder.xcarchive" \
+            -exportOptionsPlist Config/ExportOptions-TestFlight.plist \
+            -exportPath "$RUNNER_TEMP/export" \
+            -allowProvisioningUpdates \
+            -authenticationKeyPath "$RUNNER_TEMP/asc/AuthKey.p8" \
+            -authenticationKeyID "$ASC_KEY_ID" \
+            -authenticationKeyIssuerID "$ASC_ISSUER_ID" \
+            | xcbeautify --renderer github-actions
+          echo "Uploaded build $BUILD_NUMBER. It appears in TestFlight after Apple finishes processing (usually 10–30 minutes)."
+
+      - name: Remove API key
+        if: always()
+        run: rm -rf "$RUNNER_TEMP/asc"

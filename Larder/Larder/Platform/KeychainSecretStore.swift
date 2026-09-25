@@ -5,7 +5,7 @@ import Security
 /// Stores secrets as generic passwords in the iOS Keychain, readable only on
 /// this device after first unlock (never synced, never in backups).
 struct KeychainSecretStore: SecretStore {
-    var service = "com.example.larder"
+    var service = "com.munkeemann.larder"
 
     func secret(for key: String) throws -> String? {
         var query = baseQuery(for: key)

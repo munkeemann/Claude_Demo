@@ -6,7 +6,7 @@
 	<false/>
 	<key>BGTaskSchedulerPermittedIdentifiers</key>
 	<array>
-		<string>com.example.larder.refresh</string>
+		<string>com.munkeemann.larder.refresh</string>
 	</array>
 	<key>UIBackgroundModes</key>
 	<array>
