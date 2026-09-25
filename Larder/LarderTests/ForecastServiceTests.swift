@@ -27,6 +27,58 @@ struct ForecastServiceTests {
         Calendar.current.date(byAdding: .day, value: count, to: Self.now)!
     }
 
+    // MARK: Usage estimates
+
+    /// Adds a gallon of milk bought `daysAgo` days before now, never logged.
+    @discardableResult
+    func buyMilk(daysAgo: Int) throws -> InventoryItem {
+        var draft = ItemDraft(name: "Milk", category: .dairy, locationID: try location(.fridge).id, purchaseDate: days(-daysAgo))
+        draft.unit = .gallon
+        return try store.addItem(from: draft, source: .receipt)
+    }
+
+    @Test func unloggedOlderGallonsAreProbablyFinished() throws {
+        let oldest = try buyMilk(daysAgo: 16)
+        let older = try buyMilk(daysAgo: 11)
+        try buyMilk(daysAgo: 6)
+        let newest = try buyMilk(daysAgo: 1)
+
+        let snapshot = try service.snapshot()
+        #expect(snapshot.estimates[oldest.id]?.isProbablyFinished == true)
+        #expect(snapshot.estimates[older.id]?.isProbablyFinished == true)
+        #expect(snapshot.estimates[newest.id]?.isProbablyFinished == false)
+        let milk = try #require(snapshot.forecasts.first { $0.name == "Milk" })
+        #expect(milk.forecast.estimatedRemaining < 1)
+        let finishedIDs = try service.probablyFinishedItems().map(\.id)
+        #expect(finishedIDs.contains(oldest.id))
+    }
+
+    @Test func confirmingFinishedClosesTheItemWithoutLoggingUse() throws {
+        let item = try buyMilk(daysAgo: 16)
+        try buyMilk(daysAgo: 11)
+        try store.confirmFinished(item)
+        #expect(item.status == .usedUp)
+        #expect(item.quantity == 0)
+        #expect((item.product?.usages ?? []).isEmpty)
+        let finishedIDs = try service.probablyFinishedItems().map(\.id)
+        #expect(!finishedIDs.contains(item.id))
+    }
+
+    @Test func recountPinsTheEstimate() throws {
+        try buyMilk(daysAgo: 16)
+        try buyMilk(daysAgo: 11)
+        let item = try buyMilk(daysAgo: 6)
+        try store.recount(item, quantity: 0.5)
+        #expect(item.status == .inStock)
+        #expect(item.quantityObservedAt == Self.now)
+        let estimate = try #require(try service.snapshot().estimates[item.id])
+        #expect(estimate.remaining == 0.5)
+        #expect(!estimate.isProjected)
+
+        try store.recount(item, quantity: 0)
+        #expect(item.status == .usedUp)
+    }
+
     // MARK: Expiry estimates
 
     @Test func addingPerishableEstimatesExpiryFromClimate() throws {

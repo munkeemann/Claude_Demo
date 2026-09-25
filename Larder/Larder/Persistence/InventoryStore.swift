@@ -395,6 +395,30 @@ struct InventoryStore {
         return result
     }
 
+    /// Confirms an item the forecast projects as finished. No usage event is
+    /// logged: the item ran out some time ago, not now, and purchases already
+    /// carry the rate.
+    func confirmFinished(_ item: InventoryItem) throws {
+        item.quantity = 0
+        item.status = .usedUp
+        item.quantityObservedAt = now()
+        item.updatedAt = now()
+        try context.save()
+    }
+
+    /// Records how much is actually left (from a shelf scan or "Still have
+    /// some"). Like an edit, it's a correction, so no usage is logged, but it
+    /// pins the forecast's projection for this item to now.
+    func recount(_ item: InventoryItem, quantity: Double) throws {
+        let counted = max(0, quantity)
+        item.quantity = counted
+        if counted > item.initialQuantity { item.initialQuantity = counted }
+        item.status = QuickActionCalculator.status(forQuantity: counted, initialQuantity: item.initialQuantity)
+        item.quantityObservedAt = now()
+        item.updatedAt = now()
+        try context.save()
+    }
+
     // MARK: - Shopping list
 
     func shoppingItems() throws -> [ShoppingListItem] {

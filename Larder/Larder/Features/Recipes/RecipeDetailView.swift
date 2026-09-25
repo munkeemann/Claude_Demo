@@ -34,7 +34,7 @@ struct RecipeDetailView: View {
                     if !evaluated.expiringItemNames.isEmpty {
                         Label("Uses soon-to-expire \(evaluated.expiringItemNames.joined(separator: ", "))", systemImage: "leaf")
                             .font(.callout)
-                            .foregroundStyle(.green)
+                            .foregroundStyle(Theme.green)
                     }
                 }
                 .padding(.vertical, 4)
@@ -89,6 +89,7 @@ struct RecipeDetailView: View {
                 }
             }
         }
+        .themedBackground()
         .navigationTitle(recipe.title)
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
@@ -97,7 +98,7 @@ struct RecipeDetailView: View {
             } label: {
                 Label(isFavorite ? "Unfavorite" : "Favorite", systemImage: isFavorite ? "heart.fill" : "heart")
             }
-            .tint(.pink)
+            .tint(Theme.terracotta)
         }
         .sheet(isPresented: $isShowingCooked) {
             CookedSheet(evaluated: evaluated) { count in
@@ -160,11 +161,11 @@ private struct IngredientRow: View {
     private var icon: some View {
         switch ingredient.availability {
         case .inInventory:
-            Image(systemName: "checkmark.circle.fill").foregroundStyle(.green)
+            Image(systemName: "checkmark.circle.fill").foregroundStyle(Theme.green)
         case .staple:
             Image(systemName: "circle.dashed").foregroundStyle(.secondary)
         case .missing:
-            Image(systemName: "cart").foregroundStyle(.orange)
+            Image(systemName: "cart").foregroundStyle(Theme.honeyInk)
         }
     }
 
@@ -223,6 +224,7 @@ struct CookedSheet: View {
                     Text("Amounts are estimated from the recipe. Adjust them to match what you actually used.")
                 }
             }
+            .themedBackground()
             .navigationTitle("What did you use?")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {

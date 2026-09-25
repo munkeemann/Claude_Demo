@@ -31,7 +31,7 @@ struct ReceiptReviewView: View {
                         } label: {
                             Label(line.include ? "Skip" : "Include", systemImage: line.include ? "minus.circle" : "plus.circle")
                         }
-                        .tint(line.include ? .gray : .green)
+                        .tint(line.include ? .gray : Theme.green)
                     }
                 }
             } header: {
@@ -73,7 +73,7 @@ struct ReceiptReviewView: View {
                     "Items differ from the subtotal by \(abs(difference).formattedCents(currencyCode: review.currencyCode)). A line may be missing or misread.",
                     systemImage: "exclamationmark.triangle"
                 )
-                .foregroundStyle(.orange)
+                .foregroundStyle(Theme.honeyInk)
             }
             Text("Swipe to skip items. Tap to edit; your edits are remembered for next time.")
         }
@@ -101,13 +101,13 @@ private struct ReceiptLineRow: View {
                     if line.origin == .remembered {
                         Image(systemName: "brain")
                             .font(.caption)
-                            .foregroundStyle(.purple)
+                            .foregroundStyle(Theme.green)
                             .accessibilityLabel("Remembered from a previous receipt")
                     }
                     if line.confidence == .low {
                         Image(systemName: "questionmark.circle")
                             .font(.caption)
-                            .foregroundStyle(.orange)
+                            .foregroundStyle(Theme.honeyInk)
                             .accessibilityLabel("Low confidence")
                     }
                 }
@@ -205,6 +205,7 @@ struct ReceiptLineEditor: View {
                 Text("Storage")
             }
         }
+        .themedBackground()
         .navigationTitle(line.name.isEmpty ? "Item" : line.name)
         .navigationBarTitleDisplayMode(.inline)
     }

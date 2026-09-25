@@ -14,13 +14,17 @@ struct InventoryHomeView: View {
     @State private var isScanningReceipt = false
     @State private var isShowingFilters = false
     @State private var useSomeItem: InventoryItem?
+    @State private var recountItem: InventoryItem?
     @State private var errorMessage: String?
 
     private var store: InventoryStore { InventoryStore(context: modelContext) }
+    private var service: ForecastService { ForecastService(context: modelContext) }
 
     var body: some View {
+        let snapshot = items.isEmpty ? ForecastSnapshot.empty : ((try? service.snapshot()) ?? .empty)
         NavigationStack {
-            content
+            content(snapshot)
+                .themedBackground()
                 .navigationTitle("Inventory")
                 .searchable(text: $filter.searchText, prompt: "Search items, brands, categories")
                 .toolbar { toolbar }
@@ -45,6 +49,9 @@ struct InventoryHomeView: View {
         .sheet(item: $useSomeItem) { item in
             UseSomeSheet(item: item)
         }
+        .sheet(item: $recountItem) { item in
+            RecountSheet(item: item)
+        }
         .sheet(isPresented: $isShowingFilters) {
             InventoryFilterSheet(filter: $filter, locations: locations)
         }
@@ -54,10 +61,14 @@ struct InventoryHomeView: View {
     // MARK: - Content
 
     @ViewBuilder
-    private var content: some View {
+    private func content(_ snapshot: ForecastSnapshot) -> some View {
         if items.isEmpty {
             ContentUnavailableView {
-                Label("Nothing tracked yet", systemImage: "cabinet")
+                VStack(spacing: 12) {
+                    LarderMark(size: 88)
+                    Text("Nothing tracked yet")
+                        .foregroundStyle(Theme.greenDeep)
+                }
             } description: {
                 Text("Add items by hand or scan a barcode. You can also load sample data to explore.")
             } actions: {
@@ -81,21 +92,26 @@ struct InventoryHomeView: View {
             }
         } else {
             List {
+                Section {
+                    InventorySummaryCard(items: items, snapshot: snapshot)
+                        .listRowInsets(EdgeInsets())
+                        .listRowBackground(Color.clear)
+                }
                 ForEach(sections) { section in
                     Section {
                         ForEach(section.items) { item in
                             NavigationLink(value: item) {
-                                InventoryItemRow(item: item)
+                                InventoryItemRow(item: item, estimate: snapshot.estimates[item.id])
                             }
                             .swipeActions(edge: .leading, allowsFullSwipe: true) {
                                 Button { apply(.usedUp, to: item) } label: {
                                     Label("Used Up", systemImage: "checkmark.circle")
                                 }
-                                .tint(.green)
+                                .tint(Theme.green)
                                 Button { useSomeItem = item } label: {
                                     Label("Used Some", systemImage: "minus.circle")
                                 }
-                                .tint(.blue)
+                                .tint(Theme.greenDeep)
                             }
                             .swipeActions(edge: .trailing, allowsFullSwipe: false) {
                                 Button(role: .destructive) { perform { try store.delete(item) } } label: {
@@ -104,12 +120,13 @@ struct InventoryHomeView: View {
                                 Button { apply(.tossed, to: item) } label: {
                                     Label("Tossed", systemImage: "xmark.bin")
                                 }
-                                .tint(.orange)
+                                .tint(Theme.terracotta)
                             }
                             .contextMenu { contextMenu(for: item) }
                         }
                     } header: {
                         Label(section.title, systemImage: section.systemImage)
+                            .foregroundStyle(Theme.greenDeep)
                     }
                 }
             }
@@ -121,6 +138,7 @@ struct InventoryHomeView: View {
     @ViewBuilder
     private func contextMenu(for item: InventoryItem) -> some View {
         Button { useSomeItem = item } label: { Label("Used Some…", systemImage: "minus.circle") }
+        Button { recountItem = item } label: { Label("How Much Is Left?", systemImage: "gauge.with.dots.needle.50percent") }
         Button { apply(.usedUp, to: item) } label: { Label("Used Up", systemImage: "checkmark.circle") }
         Button { apply(.tossed, to: item) } label: { Label("Tossed", systemImage: "xmark.bin") }
         Divider()
@@ -151,7 +169,7 @@ struct InventoryHomeView: View {
             .padding(.horizontal)
             .padding(.vertical, 8)
         }
-        .background(.bar)
+        .background(Theme.background)
     }
 
     @ToolbarContentBuilder
@@ -212,6 +230,50 @@ struct InventoryHomeView: View {
         } catch {
             errorMessage = error.localizedDescription
         }
+    }
+}
+
+/// The icon-green card at the top of the inventory: what's in stock and
+/// what needs attention.
+struct InventorySummaryCard: View {
+    let items: [InventoryItem]
+    let snapshot: ForecastSnapshot
+    var now = Date()
+
+    var body: some View {
+        let active = items.filter(\.status.isActive)
+        let soon = Calendar.current.date(byAdding: .day, value: 3, to: now) ?? now
+        let expiring = active.filter { ($0.expiryDate ?? .distantFuture) < soon }.count
+        let finished = active.filter { snapshot.estimates[$0.id]?.isProbablyFinished == true }.count
+        let runningLow = snapshot.forecasts.filter {
+            !$0.forecast.isOutOfStock && $0.forecast.daysUntilRunOut(from: now) <= 3
+        }.count
+
+        BrandCard {
+            HStack(alignment: .center, spacing: 14) {
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("\(active.count) \(active.count == 1 ? "item" : "items") on hand")
+                        .font(.title3.weight(.bold))
+                    HStack(spacing: 14) {
+                        stat(expiring, "expiring", systemImage: "clock")
+                        stat(runningLow, "running low", systemImage: "chart.line.downtrend.xyaxis")
+                        if finished > 0 {
+                            stat(finished, "to check", systemImage: "questionmark.circle")
+                        }
+                    }
+                    .font(.subheadline.weight(.medium))
+                }
+                Spacer(minLength: 0)
+                LarderMark(size: 52)
+            }
+        }
+        .accessibilityElement(children: .combine)
+    }
+
+    private func stat(_ count: Int, _ label: String, systemImage: String) -> some View {
+        Label("\(count) \(label)", systemImage: systemImage)
+            .labelStyle(.titleAndIcon)
+            .foregroundStyle(count > 0 ? Theme.cream : Theme.cream.opacity(0.7))
     }
 }
 

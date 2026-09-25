@@ -33,6 +33,7 @@ struct LocationsSettingsView: View {
                 Text("The climate decides default shelf life for items stored here. Built-in locations can be renamed but not deleted.")
             }
         }
+        .themedBackground()
         .navigationTitle("Storage Locations")
         .toolbar {
             ToolbarItem(placement: .primaryAction) {
@@ -139,6 +140,7 @@ private struct LocationEditorSheet: View {
                     .padding(.vertical, 4)
                 }
             }
+            .themedBackground()
             .navigationTitle(isNew ? "New Location" : "Edit Location")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {

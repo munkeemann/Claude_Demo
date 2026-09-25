@@ -1,8 +1,9 @@
 import InventoryCore
 import SwiftUI
 
-/// Asks how much of an item was used, then logs a partial-use event.
-struct UseSomeSheet: View {
+/// "How much is left?" Sets an item's amount without logging usage, which
+/// resets the forecast's projection for it.
+struct RecountSheet: View {
     let item: InventoryItem
 
     @Environment(\.dismiss) private var dismiss
@@ -10,22 +11,22 @@ struct UseSomeSheet: View {
     @State private var amount: Double
     @State private var errorMessage: String?
 
-    init(item: InventoryItem) {
+    /// - Parameter suggested: The estimate to start from, if there is one.
+    init(item: InventoryItem, suggested: Double? = nil) {
         self.item = item
-        _amount = State(initialValue: QuickActionCalculator.suggestedUseAmount(for: item.state))
+        _amount = State(initialValue: suggested ?? item.quantity)
     }
 
+    private var full: Double { max(item.initialQuantity, item.quantity) }
     private var step: Double { QuickActionCalculator.useStep(for: item.state) }
-    private var maximum: Double { max(item.quantity, step) }
-    private var remaining: Double { max(0, item.quantity - amount) }
 
     var body: some View {
         NavigationStack {
             Form {
                 Section {
-                    Stepper(value: $amount, in: 0...maximum, step: step) {
+                    Stepper(value: $amount, in: 0...max(full, amount, step), step: step) {
                         HStack {
-                            Text("Used")
+                            Text("Left")
                             Spacer()
                             TextField("Amount", value: $amount, format: .number.precision(.fractionLength(0...2)))
                                 .keyboardType(.decimalPad)
@@ -36,37 +37,32 @@ struct UseSomeSheet: View {
                         }
                     }
                 } footer: {
-                    if remaining <= 0 {
-                        Text("That's all of it. The item will be marked used up.")
-                    } else {
-                        Text("\(item.unit.label(for: remaining)) left afterward.")
-                    }
+                    Text(amount <= 0
+                        ? "The item will be marked used up."
+                        : "Larder estimates use from here, so a quick check now and then keeps predictions accurate.")
                 }
 
-                Section {
+                Section("Quick amounts") {
                     HStack {
-                        ForEach([0.25, 0.5, 1.0], id: \.self) { fraction in
-                            Button(fractionLabel(fraction)) {
-                                amount = (item.quantity * fraction * 100).rounded() / 100
+                        ForEach([1.0, 0.75, 0.5, 0.25, 0], id: \.self) { fraction in
+                            Button(Self.label(fraction)) {
+                                amount = (full * fraction * 100).rounded() / 100
                             }
                             .buttonStyle(.bordered)
                             .frame(maxWidth: .infinity)
                         }
                     }
-                } header: {
-                    Text("Quick amounts")
                 }
             }
             .themedBackground()
-            .navigationTitle(item.displayName)
+            .navigationTitle("How much is left?")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Cancel") { dismiss() }
                 }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("Log") { save() }
-                        .disabled(amount <= 0)
+                    Button("Save") { save() }
                 }
             }
             .errorAlert($errorMessage)
@@ -74,17 +70,19 @@ struct UseSomeSheet: View {
         .presentationDetents([.medium, .large])
     }
 
-    private func fractionLabel(_ fraction: Double) -> String {
+    static func label(_ fraction: Double) -> String {
         switch fraction {
-        case 0.25: "¼"
+        case 1: "Full"
+        case 0.75: "¾"
         case 0.5: "½"
-        default: "All"
+        case 0.25: "¼"
+        default: "None"
         }
     }
 
     private func save() {
         do {
-            try InventoryStore(context: modelContext).apply(.usedSome(amount), to: item)
+            try InventoryStore(context: modelContext).recount(item, quantity: amount)
             dismiss()
         } catch {
             errorMessage = error.localizedDescription
@@ -96,7 +94,7 @@ struct UseSomeSheet: View {
     Text("Preview host")
         .sheet(isPresented: .constant(true)) {
             if let item = PreviewSupport.firstItem(named: "Whole Milk") {
-                UseSomeSheet(item: item)
+                RecountSheet(item: item, suggested: 0.4)
             }
         }
         .modelContainer(PreviewSupport.container)

@@ -55,6 +55,7 @@ struct ReceiptScanFlow: View {
                     }
                 }
             }
+            .themedBackground()
             .navigationTitle("Scan Receipt")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -98,7 +99,7 @@ struct ReceiptScanFlow: View {
                     } icon: {
                         Image(systemName: "key")
                     }
-                    .foregroundStyle(.orange)
+                    .foregroundStyle(Theme.honeyInk)
                 }
             }
 
@@ -137,6 +138,7 @@ struct ReceiptScanFlow: View {
             TextEditor(text: $pastedText)
                 .font(.system(.body, design: .monospaced))
                 .padding(.horizontal)
+                .themedBackground()
                 .navigationTitle("Paste Receipt Text")
                 .navigationBarTitleDisplayMode(.inline)
                 .toolbar {

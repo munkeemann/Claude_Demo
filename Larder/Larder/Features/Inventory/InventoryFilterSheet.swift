@@ -44,6 +44,7 @@ struct InventoryFilterSheet: View {
                     }
                 }
             }
+            .themedBackground()
             .navigationTitle("Filter")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {

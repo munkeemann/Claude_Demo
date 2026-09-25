@@ -9,6 +9,7 @@ struct SoonView: View {
     @Query private var items: [InventoryItem]
     @Query private var shoppingEntries: [ShoppingListItem]
     @AppStorage(ReminderPreferences.horizonKey) private var horizonDays = 7
+    @State private var recountItem: InventoryItem?
     @State private var errorMessage: String?
 
     private var service: ForecastService { ForecastService(context: modelContext) }
@@ -16,7 +17,11 @@ struct SoonView: View {
 
     var body: some View {
         let expiring = (try? service.expiringItems(withinDays: horizonDays)) ?? []
-        let forecasts = (try? service.productForecasts()) ?? []
+        let snapshot = (try? service.snapshot()) ?? .empty
+        let forecasts = snapshot.forecasts
+        let finished = items
+            .filter { $0.status.isActive && snapshot.estimates[$0.id]?.isProbablyFinished == true }
+            .sorted { $0.purchaseDate < $1.purchaseDate }
         let horizon = Date().addingTimeInterval(Double(horizonDays) * 86_400)
         let runningLow = forecasts.filter { !$0.forecast.isOutOfStock && $0.forecast.runOutDate <= horizon }
         let outOfStock = forecasts.filter { $0.forecast.isOutOfStock && $0.purchaseCount >= 2 }
@@ -24,13 +29,29 @@ struct SoonView: View {
 
         NavigationStack {
             List {
-                if expiring.isEmpty && runningLow.isEmpty && outOfStock.isEmpty {
+                if expiring.isEmpty && runningLow.isEmpty && outOfStock.isEmpty && finished.isEmpty {
                     ContentUnavailableView(
                         "Nothing urgent",
                         systemImage: "checkmark.seal",
                         description: Text("Nothing expires or runs out in the next \(horizonDays) days.")
                     )
                     .listRowBackground(Color.clear)
+                }
+
+                if !finished.isEmpty {
+                    Section {
+                        ForEach(finished) { item in
+                            ProbablyFinishedRow(
+                                item: item,
+                                onFinished: { perform { try store.confirmFinished(item) } },
+                                onStillHave: { recountItem = item }
+                            )
+                        }
+                    } header: {
+                        Text("Probably finished")
+                    } footer: {
+                        Text("Based on how fast you usually go through them. One tap keeps the forecast honest.")
+                    }
                 }
 
                 if !expiring.isEmpty {
@@ -43,13 +64,13 @@ struct SoonView: View {
                                 Button { apply(.usedUp, to: item) } label: {
                                     Label("Used Up", systemImage: "checkmark.circle")
                                 }
-                                .tint(.green)
+                                .tint(Theme.green)
                             }
                             .swipeActions(edge: .trailing) {
                                 Button { apply(.tossed, to: item) } label: {
                                     Label("Tossed", systemImage: "xmark.bin")
                                 }
-                                .tint(.orange)
+                                .tint(Theme.terracotta)
                             }
                         }
                     }
@@ -79,6 +100,7 @@ struct SoonView: View {
                     }
                 }
             }
+            .themedBackground()
             .navigationTitle("Soon")
             .navigationDestination(for: InventoryItem.self) { item in
                 ItemDetailView(item: item)
@@ -94,13 +116,20 @@ struct SoonView: View {
                     Label("Look ahead", systemImage: "calendar")
                 }
             }
+            .sheet(item: $recountItem) { item in
+                RecountSheet(item: item)
+            }
             .errorAlert($errorMessage)
         }
     }
 
     private func apply(_ action: QuickAction, to item: InventoryItem) {
+        perform { _ = try store.apply(action, to: item) }
+    }
+
+    private func perform(_ work: () throws -> Void) {
         do {
-            _ = try withAnimation { try store.apply(action, to: item) }
+            try withAnimation { try work() }
         } catch {
             errorMessage = error.localizedDescription
         }
@@ -118,6 +147,40 @@ struct SoonView: View {
             )
         } catch {
             errorMessage = error.localizedDescription
+        }
+    }
+}
+
+/// An item the forecast thinks is gone: confirm or correct it in one tap.
+private struct ProbablyFinishedRow: View {
+    let item: InventoryItem
+    let onFinished: () -> Void
+    let onStillHave: () -> Void
+
+    var body: some View {
+        HStack(spacing: 12) {
+            CategoryIcon(category: item.product?.category ?? .other)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(item.displayName)
+                Text("Bought \(item.purchaseDate.formatted(.relative(presentation: .named)))")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+            Spacer()
+            Button(action: onFinished) {
+                Image(systemName: "checkmark.circle.fill")
+                    .font(.title2)
+                    .foregroundStyle(Theme.green)
+            }
+            .buttonStyle(.borderless)
+            .accessibilityLabel("It's finished")
+            Button(action: onStillHave) {
+                Image(systemName: "arrow.uturn.backward.circle")
+                    .font(.title2)
+                    .foregroundStyle(Theme.honeyInk)
+            }
+            .buttonStyle(.borderless)
+            .accessibilityLabel("Still have some")
         }
     }
 }
@@ -195,9 +258,9 @@ struct ConfidenceBadge: View {
 
     private var color: Color {
         switch confidence {
-        case .low: .orange
-        case .medium: .yellow
-        case .high: .green
+        case .low: Theme.terracotta
+        case .medium: Theme.honey
+        case .high: Theme.green
         }
     }
 }

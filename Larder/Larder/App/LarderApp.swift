@@ -9,6 +9,7 @@ struct LarderApp: App {
     @Environment(\.scenePhase) private var scenePhase
 
     init() {
+        Theme.applyAppearance()
         do {
             container = try Persistence.makeContainer()
         } catch {

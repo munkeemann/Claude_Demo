@@ -236,6 +236,107 @@ struct RunOutForecasterTests {
         #expect(result.basis == .usage)
     }
 
+    @Test func partialUseIsOnlyAFloorWhenPurchasesAreKnown() throws {
+        // Weekly buyer (1/7 per day). Recipe logs cover only part of that.
+        let light = [20.0, 13, 6].map {
+            ConsumptionHistory.Usage(date: F.daysAgo($0), quantity: 0.25, unit: .each, type: .partiallyUsed)
+        }
+        let underLogged = try forecast(purchases: F.purchases([21, 14, 7, 0]), usages: light, stock: F.stock(1))
+        #expect(abs(underLogged.dailyRate - 1.0 / 7) < 0.001)
+        #expect(underLogged.basis == .purchaseHistory)
+
+        // Logs show more use than purchases explain: trust the logs.
+        let heavy = [20.0, 15, 10, 5].map {
+            ConsumptionHistory.Usage(date: F.daysAgo($0), quantity: 1, unit: .each, type: .partiallyUsed)
+        }
+        let overLogged = try forecast(purchases: F.purchases([21, 14, 7, 0]), usages: heavy, stock: F.stock(1))
+        #expect(abs(overLogged.dailyRate - 0.2) < 0.001)
+        #expect(overLogged.basis == .usage)
+    }
+
+    @Test func irregularGapsUseTotalAmountOverTotalTime() throws {
+        // 3 days, then 11 days: 2 units over 14 days, not the mean of 1/3 and 1/11.
+        let result = try forecast(purchases: F.purchases([14, 11, 0]), stock: F.stock(1))
+        #expect(abs(result.dailyRate - 2.0 / 14) < 0.02)
+        #expect(result.dailyRate < (1.0 / 3 + 1.0 / 11) / 2)
+    }
+
+    // MARK: Stock projection
+
+    func stockItem(_ quantity: Double, boughtDaysAgo: Double, observedDaysAgo: Double? = nil, unit: MeasureUnit = .gallon) -> ConsumptionHistory.Stock {
+        ConsumptionHistory.Stock(
+            id: UUID(),
+            quantity: quantity,
+            unit: unit,
+            observedAt: F.daysAgo(observedDaysAgo ?? boughtDaysAgo),
+            acquiredAt: F.daysAgo(boughtDaysAgo)
+        )
+    }
+
+    @Test func unloggedOlderItemsAreProjectedAsFinished() throws {
+        // A gallon every 5 days, never logged: three items still "in stock".
+        let items = [stockItem(1, boughtDaysAgo: 11), stockItem(1, boughtDaysAgo: 6), stockItem(1, boughtDaysAgo: 1)]
+        let result = try forecast(
+            purchases: F.purchases([21, 16, 11, 6, 1], unit: .gallon),
+            stock: items,
+            unit: .gallon
+        )
+        #expect(abs(result.dailyRate - 0.2) < 0.02)
+        // Only the newest gallon is left, minus a day of use.
+        #expect(abs(result.estimatedRemaining - 0.8) < 0.05)
+        #expect(result.items.map(\.isProbablyFinished) == [true, true, false])
+        #expect(result.items.last?.id == items.last?.id)
+    }
+
+    @Test func earlyRestockLeavesTheNewItemUntouched() throws {
+        // Weekly buyer restocked after 2 days: the old gallon is still being used.
+        let items = [stockItem(1, boughtDaysAgo: 2), stockItem(1, boughtDaysAgo: 0)]
+        let result = try forecast(
+            purchases: F.purchases([23, 16, 9, 2, 0], unit: .gallon),
+            stock: items,
+            unit: .gallon
+        )
+        #expect(abs(result.items[0].remaining - (1 - 2.0 / 7)) < 0.05)
+        #expect(result.items[1].remaining == 1)
+        #expect(!result.items[1].isProjected)
+        #expect(abs(result.estimatedRemaining - (2 - 2.0 / 7)) < 0.05)
+    }
+
+    @Test func aRecentCountPinsThatItem() throws {
+        // The older item was counted today at half; the newer one hasn't been started.
+        let items = [stockItem(0.5, boughtDaysAgo: 12, observedDaysAgo: 0), stockItem(1, boughtDaysAgo: 3)]
+        let result = try forecast(
+            purchases: F.purchases([26, 19, 12, 3], unit: .gallon),
+            stock: items,
+            unit: .gallon
+        )
+        #expect(result.items.map(\.remaining) == [0.5, 1])
+        #expect(abs(result.estimatedRemaining - 1.5) < 0.001)
+    }
+
+    @Test func itemEstimatesUseEachItemsUnit() throws {
+        let item = ConsumptionHistory.Stock(id: UUID(), quantity: 4, unit: .quart, observedAt: F.daysAgo(3.5), acquiredAt: F.daysAgo(3.5))
+        let result = try forecast(
+            purchases: F.purchases([17.5, 10.5, 3.5], unit: .gallon),
+            stock: [item],
+            unit: .gallon
+        )
+        let estimate = try #require(result.items.first)
+        #expect(estimate.unit == .quart)
+        #expect(estimate.recorded == 4)
+        // Half a week of a gallon a week: 2 quarts left.
+        #expect(abs(estimate.remaining - 2) < 0.01)
+    }
+
+    @Test func estimatesRoundForDisplay() {
+        #expect(MeasureUnit.each.roundedEstimate(2.6) == 2.5)
+        #expect(MeasureUnit.each.roundedEstimate(0.05) == 0.25)
+        #expect(MeasureUnit.gallon.roundedEstimate(0.43) == 0.4)
+        #expect(MeasureUnit.gallon.roundedEstimate(0.01) == 0.1)
+        #expect(MeasureUnit.ounce.roundedEstimate(23.4) == 23)
+        #expect(MeasureUnit.ounce.roundedEstimate(0) == 0)
+    }
+
     @Test func noHistoryAtAllReturnsNil() {
         let history = ConsumptionHistory(category: .dairy, unit: .each, purchases: [], usages: [], stock: [])
         #expect(RunOutForecaster.forecast(history, now: F.now) == nil)

@@ -2,23 +2,34 @@ import InventoryCore
 import SwiftUI
 
 extension ProductCategory {
+    /// Earthy tones that sit with the icon's greens and honey.
     var tint: Color {
         switch self {
-        case .produce: .green
-        case .meat: .red
-        case .seafood: .teal
-        case .dairy, .cheese, .eggs: .yellow
-        case .bakery, .grains: .brown
-        case .deli, .leftovers: .orange
-        case .frozen: .cyan
-        case .canned, .condiments, .spices: .indigo
-        case .snacks: .pink
-        case .beverages: .mint
-        case .cleaning, .laundry: .blue
-        case .paperGoods, .other: .gray
-        case .personalCare, .health, .baby: .purple
-        case .pet: .orange
+        case .produce: Color(hex: 0x5E9E5A)
+        case .meat: Color(hex: 0xB5523B)
+        case .seafood: Color(hex: 0x3F8C8C)
+        case .dairy, .cheese, .eggs: Color(hex: 0xD49A36)
+        case .bakery, .grains: Color(hex: 0xA77B4B)
+        case .deli, .leftovers: Color(hex: 0xD4834A)
+        case .frozen: Color(hex: 0x5E9CB8)
+        case .canned, .condiments, .spices: Color(hex: 0x8C6A45)
+        case .snacks: Color(hex: 0xC66B7E)
+        case .beverages: Color(hex: 0x4FA38A)
+        case .cleaning, .laundry: Color(hex: 0x4F7FA8)
+        case .paperGoods, .other: Color(hex: 0x8A8578)
+        case .personalCare, .health, .baby: Color(hex: 0x8A6FB0)
+        case .pet: Color(hex: 0xC0522F)
         }
+    }
+}
+
+extension Color {
+    init(hex: UInt32) {
+        self.init(
+            red: Double((hex >> 16) & 0xFF) / 255,
+            green: Double((hex >> 8) & 0xFF) / 255,
+            blue: Double(hex & 0xFF) / 255
+        )
     }
 }
 
@@ -52,8 +63,8 @@ struct ExpiryBadge: View {
 
     private func color(for urgency: ExpiryStatus.Urgency) -> Color {
         switch urgency {
-        case .expired, .today: .red
-        case .soon: .orange
+        case .expired, .today: Theme.terracotta
+        case .soon: Theme.honeyInk
         case .later: .secondary
         }
     }
@@ -73,11 +84,32 @@ struct StatusBadge: View {
 
     private var foreground: Color {
         switch status {
-        case .inStock: .green
-        case .low: .orange
+        case .inStock: Theme.green
+        case .low: Theme.honeyInk
         case .usedUp: .secondary
-        case .discarded: .red
+        case .discarded: Theme.terracotta
         }
+    }
+}
+
+/// A small capsule label, e.g. "Probably finished" or "Estimated".
+struct TagBadge: View {
+    let text: String
+    var color: Color = Theme.honeyInk
+    var systemImage: String?
+
+    var body: some View {
+        HStack(spacing: 3) {
+            if let systemImage {
+                Image(systemName: systemImage)
+            }
+            Text(text)
+        }
+        .font(.caption2.weight(.semibold))
+        .padding(.horizontal, 6)
+        .padding(.vertical, 2)
+        .foregroundStyle(color)
+        .background(color.opacity(0.15), in: Capsule())
     }
 }
 
@@ -99,8 +131,9 @@ struct FilterChip: View {
             .font(.subheadline.weight(.medium))
             .padding(.horizontal, 12)
             .padding(.vertical, 6)
-            .foregroundStyle(isSelected ? Color.white : Color.primary)
-            .background(isSelected ? Color.accentColor : Color(.secondarySystemFill), in: Capsule())
+            .foregroundStyle(isSelected ? Theme.cream : Theme.greenDeep)
+            .background(isSelected ? AnyShapeStyle(Theme.brandGradient) : AnyShapeStyle(Theme.card), in: Capsule())
+            .overlay(Capsule().strokeBorder(Theme.green.opacity(isSelected ? 0 : 0.25)))
         }
         .buttonStyle(.plain)
         .accessibilityAddTraits(isSelected ? .isSelected : [])

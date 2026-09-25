@@ -8,9 +8,11 @@ extension Product {
         let items = self.items ?? []
         let stock = items.filter { $0.status.isActive }.map { item in
             ConsumptionHistory.Stock(
+                id: item.id,
                 quantity: item.quantity,
                 unit: item.unit,
-                observedAt: item.quantityObservedAt ?? item.purchaseDate
+                observedAt: item.quantityObservedAt ?? item.purchaseDate,
+                acquiredAt: item.purchaseDate
             )
         }
         let purchases = (self.purchases ?? []).map {
@@ -71,6 +73,19 @@ struct ForecastService {
             .sorted { $0.forecast.runOutDate < $1.forecast.runOutDate }
     }
 
+    /// Every forecast plus per-item estimates, computed once for a screen.
+    func snapshot() throws -> ForecastSnapshot {
+        ForecastSnapshot(forecasts: try productForecasts())
+    }
+
+    /// In-stock items projected to be finished that nobody marked as used up,
+    /// oldest first.
+    func probablyFinishedItems() throws -> [InventoryItem] {
+        let estimates = try snapshot().estimates
+        return try context.fetch(FetchDescriptor<InventoryItem>(sortBy: [SortDescriptor(\.purchaseDate)]))
+            .filter { $0.status.isActive && estimates[$0.id]?.isProbablyFinished == true }
+    }
+
     /// In-stock items expiring within `days` (including already expired).
     func expiringItems(withinDays days: Int) throws -> [InventoryItem] {
         let today = now()
@@ -112,4 +127,24 @@ struct ForecastService {
             .map { UpcomingEvent(name: $0.name, date: $0.forecast.runOutDate, kind: .runsOut, confidence: $0.forecast.confidence) }
         return expiring + runningOut
     }
+}
+
+/// Forecasts for every product, indexed for list rows.
+struct ForecastSnapshot {
+    var forecasts: [ProductForecast] = []
+    var byProduct: [UUID: ProductForecast] = [:]
+    /// Projected amount left in each stocked item, by item ID.
+    var estimates: [UUID: ItemEstimate] = [:]
+
+    init(forecasts: [ProductForecast] = []) {
+        self.forecasts = forecasts
+        for entry in forecasts {
+            byProduct[entry.productID] = entry
+            for estimate in entry.forecast.items {
+                if let id = estimate.id { estimates[id] = estimate }
+            }
+        }
+    }
+
+    static let empty = ForecastSnapshot()
 }

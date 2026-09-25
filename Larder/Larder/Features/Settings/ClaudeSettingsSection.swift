@@ -92,12 +92,12 @@ struct ClaudeSettingsSection: View {
             ProgressView()
         case .success:
             Label("Connected", systemImage: "checkmark.circle.fill")
-                .foregroundStyle(.green)
+                .foregroundStyle(Theme.green)
                 .labelStyle(.iconOnly)
         case .failure(let message):
             Text(message)
                 .font(.caption)
-                .foregroundStyle(.red)
+                .foregroundStyle(Theme.terracotta)
                 .multilineTextAlignment(.trailing)
         }
     }

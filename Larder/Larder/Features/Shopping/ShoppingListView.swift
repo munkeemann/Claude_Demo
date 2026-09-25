@@ -89,6 +89,7 @@ struct ShoppingListView: View {
                     }
                 }
             }
+            .themedBackground()
             .navigationTitle("Shopping")
             .toolbar {
                 if !inCart.isEmpty {

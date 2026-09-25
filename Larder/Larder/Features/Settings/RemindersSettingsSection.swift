@@ -51,7 +51,7 @@ struct RemindersSettingsSection: View {
         } footer: {
             if permissionDenied {
                 Text("Notifications are turned off for Larder. Enable them in the Settings app.")
-                    .foregroundStyle(.red)
+                    .foregroundStyle(Theme.terracotta)
             } else {
                 Text("Reminders for the same day are combined into one notification. \"Look ahead\" sets how far the Soon tab and shopping suggestions look.")
             }

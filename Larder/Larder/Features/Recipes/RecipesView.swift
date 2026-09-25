@@ -68,6 +68,7 @@ struct RecipesView: View {
                     }
                 }
             }
+            .themedBackground()
             .navigationTitle("Recipes")
         }
     }
@@ -106,7 +107,7 @@ struct RecipesView: View {
         case .failed(let message):
             Section {
                 Label(message, systemImage: "exclamationmark.triangle")
-                    .foregroundStyle(.orange)
+                    .foregroundStyle(Theme.honeyInk)
             }
         case .results(let recipes, let usedDemo):
             Section {
@@ -189,10 +190,10 @@ struct RecipeRow: View {
                 Label("\(evaluated.recipe.servings)", systemImage: "person.2")
                 if evaluated.missingCount == 0 {
                     Label("Have everything", systemImage: "checkmark.circle")
-                        .foregroundStyle(.green)
+                        .foregroundStyle(Theme.green)
                 } else {
                     Label("\(evaluated.missingCount) missing", systemImage: "cart")
-                        .foregroundStyle(.orange)
+                        .foregroundStyle(Theme.honeyInk)
                 }
             }
             .font(.caption)
@@ -200,7 +201,7 @@ struct RecipeRow: View {
             if !evaluated.expiringItemNames.isEmpty {
                 Label("Uses \(evaluated.expiringItemNames.joined(separator: ", "))", systemImage: "leaf")
                     .font(.caption)
-                    .foregroundStyle(.green)
+                    .foregroundStyle(Theme.green)
             }
             if let subtitle {
                 Text(subtitle)

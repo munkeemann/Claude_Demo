@@ -29,6 +29,7 @@ struct ScanBarcodeFlow: View {
                 scanner
                 manualEntry
             }
+            .themedBackground()
             .navigationTitle("Scan Barcode")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {

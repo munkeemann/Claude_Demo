@@ -33,6 +33,8 @@ struct RootView: View {
                 .tabItem { Label("Settings", systemImage: "gearshape") }
                 .tag(Tab.settings)
         }
+        .tint(Theme.green)
+        .fontDesign(.rounded)
     }
 }
 

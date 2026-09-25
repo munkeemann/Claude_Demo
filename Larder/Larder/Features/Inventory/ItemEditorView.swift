@@ -132,11 +132,12 @@ struct ItemEditorView: View {
                 Section {
                     ForEach(draft.issues, id: \.self) { issue in
                         Label(issue.message, systemImage: "exclamationmark.triangle")
-                            .foregroundStyle(.orange)
+                            .foregroundStyle(Theme.honeyInk)
                     }
                 }
             }
         }
+        .themedBackground()
         .navigationTitle(isAdding ? "Add Item" : "Edit Item")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {

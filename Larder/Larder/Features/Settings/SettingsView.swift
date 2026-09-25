@@ -11,6 +11,23 @@ struct SettingsView: View {
     var body: some View {
         NavigationStack {
             Form {
+                Section {
+                    BrandCard {
+                        HStack(spacing: 14) {
+                            LarderMark(size: 52)
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("Larder")
+                                    .font(.title3.weight(.bold))
+                                Text("Version \(Self.appVersion)")
+                                    .font(.subheadline)
+                                    .opacity(0.85)
+                            }
+                        }
+                    }
+                    .listRowInsets(EdgeInsets())
+                    .listRowBackground(Color.clear)
+                }
+
                 ClaudeSettingsSection()
 
                 RemindersSettingsSection()
@@ -51,6 +68,7 @@ struct SettingsView: View {
                     .font(.footnote)
                 }
             }
+            .themedBackground()
             .navigationTitle("Settings")
             .confirmationDialog(
                 "Delete all products, items and history?",

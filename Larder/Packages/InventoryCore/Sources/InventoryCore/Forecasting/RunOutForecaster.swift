@@ -43,16 +43,22 @@ public struct ConsumptionHistory: Sendable {
     }
 
     public struct Stock: Sendable, Equatable {
+        /// The inventory item this stock is, for per-item estimates.
+        public var id: UUID?
         public var quantity: Double
         public var unit: MeasureUnit
-        /// When `quantity` was last known to be accurate (purchase or last
-        /// logged usage).
+        /// When `quantity` was last known to be accurate (purchase, a logged
+        /// use, a count or an edit).
         public var observedAt: Date
+        /// When the item was bought. Older items are assumed to be used first.
+        public var acquiredAt: Date
 
-        public init(quantity: Double, unit: MeasureUnit, observedAt: Date) {
+        public init(id: UUID? = nil, quantity: Double, unit: MeasureUnit, observedAt: Date, acquiredAt: Date? = nil) {
+            self.id = id
             self.quantity = quantity
             self.unit = unit
             self.observedAt = observedAt
+            self.acquiredAt = acquiredAt ?? observedAt
         }
     }
 
@@ -116,29 +122,90 @@ public struct RunOutForecast: Sendable, Equatable {
     public var observationCount: Int
     /// Most common recent purchase amount, for the shopping list.
     public var typicalPurchaseQuantity: Double
+    /// Projected amount left in each stocked item, oldest first.
+    public var items: [ItemEstimate] = []
 
     public var isOutOfStock: Bool { estimatedRemaining <= 0.0001 }
+
+    /// Days one typical purchase lasts at the current rate.
+    public var daysPerPurchase: Double { typicalPurchaseQuantity / dailyRate }
 
     public func daysUntilRunOut(from now: Date) -> Double {
         runOutDate.timeIntervalSince(now) / 86_400
     }
 }
 
+/// How much of one stocked item is probably left, assuming the household
+/// finishes older items before starting newer ones.
+public struct ItemEstimate: Sendable, Equatable {
+    public var id: UUID?
+    /// In the item's own unit.
+    public var remaining: Double
+    public var unit: MeasureUnit
+    /// What was recorded for the item (its last known quantity).
+    public var recorded: Double
+    /// When the item is projected to be finished.
+    public var finishDate: Date
+
+    public init(id: UUID?, remaining: Double, unit: MeasureUnit, recorded: Double, finishDate: Date) {
+        self.id = id
+        self.remaining = remaining
+        self.unit = unit
+        self.recorded = recorded
+        self.finishDate = finishDate
+    }
+
+    /// Projected to be used up, though nobody said so.
+    public var isProbablyFinished: Bool { remaining <= 0.0001 && recorded > 0.0001 }
+
+    /// Projected to have been used since it was last recorded.
+    public var isProjected: Bool { abs(remaining - recorded) > 0.0001 }
+
+    /// `remaining` rounded for display ("about ½ gal left").
+    public var roundedRemaining: Double { unit.roundedEstimate(remaining) }
+}
+
+extension MeasureUnit {
+    /// Rounds an estimated amount to what reads naturally: quarters for
+    /// counted units, tenths below 10 otherwise, whole numbers above. Never
+    /// rounds something that's left down to zero.
+    public func roundedEstimate(_ value: Double) -> Double {
+        guard value > 0.0001 else { return 0 }
+        let rounded: Double
+        if isDiscrete {
+            rounded = (value * 4).rounded() / 4
+            return max(rounded, 0.25)
+        }
+        rounded = value < 10 ? (value * 10).rounded() / 10 : value.rounded()
+        return max(rounded, value < 10 ? 0.1 : 1)
+    }
+}
+
 /// Forecasts when a consumable runs out from purchase and usage history.
 ///
-/// Rate observations (units per day) come from three sources:
+/// Nobody logs every glass of milk, so the rate is learned mostly from what
+/// the household buys: in steady state, what you buy is what you use.
+///
+/// Rate observations (an amount used over a number of days) come from:
 /// 1. "Used up" events: the time from buying an item to finishing it. This is
 ///    the most direct signal and gets triple weight.
-/// 2. Repeat purchases: each purchase's quantity divided by the gap to the
-///    next purchase, assuming it was consumed by then.
-/// 3. Logged partial use: total logged amount over the span it covers, as one
-///    extra observation when there are at least three such logs.
+/// 2. Repeat purchases: each purchase's quantity over the gap to the next
+///    purchase, assuming it was consumed by then.
 ///
 /// Observations are weighted toward recent ones (each step back in time
-/// multiplies the weight by `recencyDecay`), outliers beyond 3× the median are
-/// dropped, and a weighted mean gives the rate. Confidence reflects how many
-/// observations there are and how much they vary. With no usable history the
-/// category's typical rate is used, at low confidence.
+/// multiplies the weight by `recencyDecay`), outliers beyond 3× the median
+/// rate are dropped, and the rate is total weighted amount over total weighted
+/// days, so irregular gaps don't skew it the way averaging per-gap rates
+/// would. Logged partial use (recipes, "used some") is incomplete by nature,
+/// so it only sets a floor on the rate, or stands alone when nothing else is
+/// known. Confidence reflects how many observations there are and how much
+/// they vary. With no usable history the category's typical rate is used, at
+/// low confidence.
+///
+/// Stock is projected forward item by item, oldest first: each item starts
+/// being used when the one before it runs out (or when it was last counted,
+/// if later), so three unlogged gallons bought a week apart don't add up to
+/// three gallons on hand.
 public enum RunOutForecaster {
     static let recencyDecay = 0.75
     static let usedUpWeight = 3.0
@@ -162,9 +229,12 @@ public enum RunOutForecaster {
     }
 
     struct Observation {
-        var rate: Double
+        var quantity: Double
+        var days: Double
         var date: Date
         var weight: Double
+
+        var rate: Double { quantity / days }
     }
 
     public static func forecast(_ history: ConsumptionHistory, now: Date) -> RunOutForecast? {
@@ -176,44 +246,56 @@ public enum RunOutForecaster {
 
         let stock = history.stock.compactMap { item -> ConsumptionHistory.Stock? in
             guard let quantity = item.unit.convert(item.quantity, to: unit) else { return nil }
-            return ConsumptionHistory.Stock(quantity: max(0, quantity), unit: unit, observedAt: item.observedAt)
+            var converted = item
+            converted.quantity = max(0, quantity)
+            converted.unit = unit
+            return converted
         }
 
         guard !purchases.isEmpty || !stock.isEmpty else { return nil }
 
         var observations = usedUpObservations(history.usages, purchases: purchases, unit: unit)
-        let usedUpCount = observations.count
+        let hasUsedUp = !observations.isEmpty
         observations += intervalObservations(purchases)
         let partial = partialUseObservation(history.usages, unit: unit)
-        if let partial { observations.append(partial) }
-        let hasUsageSignal = usedUpCount > 0 || partial != nil
 
         let typicalQuantity = typicalPurchaseQuantity(purchases) ?? stock.map(\.quantity).max() ?? 1
 
-        let rate: Double
+        var rate: Double
         let spread: Double
-        let confidence: ForecastConfidence
-        let basis: RunOutForecast.Basis
+        var confidence: ForecastConfidence
+        var basis: RunOutForecast.Basis
+        var count: Int
         let trimmed = trimOutliers(weightedByRecency(observations))
-        if trimmed.isEmpty {
+        if !trimmed.isEmpty {
+            let (ratio, cv) = weightedRateAndCV(trimmed)
+            rate = ratio
+            spread = min(max(cv, 0.1), 0.8)
+            confidence = Self.confidence(count: trimmed.count, cv: cv)
+            basis = hasUsedUp ? .usage : .purchaseHistory
+            count = trimmed.count
+            // Logged use is a lower bound: it can't exceed what was used.
+            if let partial, partial.rate > rate {
+                rate = partial.rate
+                basis = .usage
+            }
+        } else if let partial {
+            rate = partial.rate
+            spread = 0.5
+            confidence = .low
+            basis = .usage
+            count = 1
+        } else {
             rate = typicalQuantity / defaultDaysPerPurchase(for: history.category)
             spread = 0.5
             confidence = .low
             basis = .categoryDefault
-        } else {
-            let (mean, cv) = weightedMeanAndCV(trimmed)
-            rate = mean
-            spread = min(max(cv, 0.1), 0.8)
-            confidence = Self.confidence(count: trimmed.count, cv: cv)
-            basis = hasUsageSignal ? .usage : .purchaseHistory
+            count = 0
         }
         guard rate > 0, rate.isFinite else { return nil }
 
-        // Project consumption since the stock was last observed.
-        let recorded = stock.map(\.quantity).reduce(0, +)
-        let lastObserved = stock.map(\.observedAt).max() ?? now
-        let elapsedDays = max(0, now.timeIntervalSince(lastObserved) / day)
-        let remaining = max(0, recorded - rate * elapsedDays)
+        let items = project(stock, rate: rate, now: now, itemUnits: history.stock.map(\.unit))
+        let remaining = items.map(\.remainingInForecastUnit).reduce(0, +)
 
         let daysLeft = remaining / rate
         let fastRate = rate * (1 + spread)
@@ -227,9 +309,50 @@ public enum RunOutForecaster {
             latest: now.addingTimeInterval(remaining / slowRate * day),
             confidence: confidence,
             basis: basis,
-            observationCount: trimmed.count,
-            typicalPurchaseQuantity: typicalQuantity
+            observationCount: count,
+            typicalPurchaseQuantity: typicalQuantity,
+            items: items.map(\.estimate)
         )
+    }
+
+    // MARK: - Stock projection
+
+    struct ProjectedItem {
+        var estimate: ItemEstimate
+        var remainingInForecastUnit: Double
+    }
+
+    /// Walks stocked items oldest first. Each starts being used at the later
+    /// of when it was last observed and when the previous item ran out, and
+    /// lasts its quantity divided by the rate.
+    static func project(
+        _ stock: [ConsumptionHistory.Stock],
+        rate: Double,
+        now: Date,
+        itemUnits: [MeasureUnit]
+    ) -> [ProjectedItem] {
+        let ordered = zip(stock, itemUnits).sorted { lhs, rhs in
+            (lhs.0.acquiredAt, lhs.0.observedAt) < (rhs.0.acquiredAt, rhs.0.observedAt)
+        }
+        var previousFinish = Date.distantPast
+        return ordered.map { item, itemUnit in
+            let start = max(item.observedAt, previousFinish)
+            let finish = start.addingTimeInterval(item.quantity / rate * day)
+            previousFinish = finish
+            let used = max(0, now.timeIntervalSince(start) / day) * rate
+            let left = max(0, item.quantity - used)
+            let toItemUnit = { (value: Double) in item.unit.convert(value, to: itemUnit) ?? value }
+            return ProjectedItem(
+                estimate: ItemEstimate(
+                    id: item.id,
+                    remaining: toItemUnit(left),
+                    unit: itemUnit,
+                    recorded: toItemUnit(item.quantity),
+                    finishDate: finish
+                ),
+                remainingInForecastUnit: left
+            )
+        }
     }
 
     // MARK: - Observations
@@ -254,7 +377,7 @@ public enum RunOutForecaster {
             }
             let days = max(minimumSpanDays, usage.date.timeIntervalSince(start) / day)
             guard quantity > 0 else { return nil }
-            return Observation(rate: quantity / days, date: usage.date, weight: usedUpWeight)
+            return Observation(quantity: quantity, days: days, date: usage.date, weight: usedUpWeight)
         }
     }
 
@@ -263,7 +386,7 @@ public enum RunOutForecaster {
         return zip(purchases, purchases.dropFirst()).compactMap { current, next in
             let days = next.date.timeIntervalSince(current.date) / day
             guard days >= 1 else { return nil }
-            return Observation(rate: current.quantity / days, date: next.date, weight: 1)
+            return Observation(quantity: current.quantity, days: days, date: next.date, weight: 1)
         }
     }
 
@@ -280,7 +403,7 @@ public enum RunOutForecaster {
         // The first log's amount was used before the span starts.
         let total = logged.dropFirst().map(\.1).reduce(0, +)
         guard total > 0 else { return nil }
-        return Observation(rate: total / days, date: last, weight: 1)
+        return Observation(quantity: total, days: days, date: last, weight: 1)
     }
 
     // MARK: - Statistics
@@ -306,13 +429,16 @@ public enum RunOutForecaster {
         return observations.filter { $0.rate <= median * 3 && $0.rate >= median / 3 }
     }
 
-    static func weightedMeanAndCV(_ observations: [Observation]) -> (mean: Double, cv: Double) {
+    /// Rate as weighted total amount over weighted total days, plus the
+    /// weighted coefficient of variation of the individual rates.
+    static func weightedRateAndCV(_ observations: [Observation]) -> (rate: Double, cv: Double) {
+        let weightedDays = observations.map { $0.days * $0.weight }.reduce(0, +)
+        guard weightedDays > 0 else { return (0, 1) }
+        let rate = observations.map { $0.quantity * $0.weight }.reduce(0, +) / weightedDays
+        guard observations.count > 1, rate > 0 else { return (rate, 1) }
         let totalWeight = observations.map(\.weight).reduce(0, +)
-        guard totalWeight > 0 else { return (0, 1) }
-        let mean = observations.map { $0.rate * $0.weight }.reduce(0, +) / totalWeight
-        guard observations.count > 1, mean > 0 else { return (mean, 1) }
-        let variance = observations.map { $0.weight * pow($0.rate - mean, 2) }.reduce(0, +) / totalWeight
-        return (mean, sqrt(variance) / mean)
+        let variance = observations.map { $0.weight * pow($0.rate - rate, 2) }.reduce(0, +) / totalWeight
+        return (rate, sqrt(variance) / rate)
     }
 
     static func confidence(count: Int, cv: Double) -> ForecastConfidence {
