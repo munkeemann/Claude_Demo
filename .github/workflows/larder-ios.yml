@@ -43,13 +43,16 @@ jobs:
         run: swift test --package-path Larder/Packages/InventoryCore
 
       - name: Install XcodeGen and xcbeautify
+        if: ${{ !cancelled() }}
         run: brew install xcodegen xcbeautify
 
       - name: Generate Xcode project
+        if: ${{ !cancelled() }}
         working-directory: Larder
         run: xcodegen generate
 
       - name: Pick an iPhone simulator
+        if: ${{ !cancelled() }}
         id: sim
         run: |
           UDID=$(xcrun simctl list devices available --json | python3 -c '
@@ -72,6 +75,7 @@ jobs:
           echo "udid=$UDID" >> "$GITHUB_OUTPUT"
 
       - name: Build and test app
+        if: ${{ !cancelled() }}
         working-directory: Larder
         run: |
           set -o pipefail

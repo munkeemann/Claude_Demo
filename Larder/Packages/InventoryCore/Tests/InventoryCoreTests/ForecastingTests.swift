@@ -132,7 +132,9 @@ struct RunOutForecasterTests {
             purchases: F.purchases([120, 90, 60, 30, 23, 16, 9, 2]),
             stock: F.stock(1)
         )
-        let unweightedMean = (3 * (1.0 / 30) + 4 * (1.0 / 7)) / 7
+        let monthlyRate: Double = 1.0 / 30
+        let weeklyRate: Double = 1.0 / 7
+        let unweightedMean: Double = (3 * monthlyRate + 4 * weeklyRate) / 7
         #expect(result.dailyRate > unweightedMean)
     }
 
