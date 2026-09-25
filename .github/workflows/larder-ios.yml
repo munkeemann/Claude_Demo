@@ -5,10 +5,12 @@ on:
     branches: [main, "claude/**"]
     paths:
       - "Larder/**"
+      - "!Larder/Config/testflight-build.txt"
       - ".github/workflows/larder-ios.yml"
   pull_request:
     paths:
       - "Larder/**"
+      - "!Larder/Config/testflight-build.txt"
       - ".github/workflows/larder-ios.yml"
   workflow_dispatch:
 
