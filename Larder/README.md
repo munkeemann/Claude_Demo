@@ -25,6 +25,21 @@ See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for the design and
 - Xcode 16 or later (Swift 6 toolchain)
 - [XcodeGen](https://github.com/yonaskolb/XcodeGen): `brew install xcodegen`
 
+## Run it in the Simulator (one command)
+
+On a Mac with Xcode 16 or newer, including a rented one like MacinCloud, open Terminal and run:
+
+```sh
+git clone -b claude/household-inventory-app-s6xsut https://github.com/munkeemann/Claude_Demo.git && Claude_Demo/Larder/scripts/run-simulator.sh
+```
+
+The script:
+- generates the Xcode project, fetching XcodeGen if needed (no admin rights required)
+- builds the app, then boots an iPhone simulator and launches Larder
+- opens the project in Xcode
+
+After pulling new changes, run `Larder/scripts/run-simulator.sh` again from the `Claude_Demo` folder.
+
 ## Getting started
 
 ```sh

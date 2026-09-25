@@ -87,6 +87,10 @@ jobs:
             CODE_SIGNING_ALLOWED=NO \
             | xcbeautify --renderer github-actions
 
+      - name: Build and launch with run-simulator.sh
+        if: ${{ !cancelled() }}
+        run: Larder/scripts/run-simulator.sh --no-gui
+
       - name: Upload test results
         if: failure()
         uses: actions/upload-artifact@v4

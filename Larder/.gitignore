@@ -8,3 +8,7 @@ DerivedData/
 .build/
 .swiftpm/
 *.xcresult
+
+# scripts/run-simulator.sh output and tools
+build/
+.tools/
