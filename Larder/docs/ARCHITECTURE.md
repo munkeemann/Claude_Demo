@@ -97,21 +97,28 @@ environment.
 
 Moving an item to a location with a different climate re-estimates it.
 
-**Run-out.** `RunOutForecaster` turns a product's history into a daily consumption rate. It draws
-rate observations from three sources:
+**Run-out.** `RunOutForecaster` turns a product's history into a daily consumption rate. Nobody
+logs every use, so purchases carry most of the signal. Rate observations (an amount over a number
+of days) come from:
 - "used up" events: purchase-to-finish time, at triple weight
-- repeat-purchase intervals: quantity bought ÷ days until the next purchase
-- partial-use logs: one aggregate observation
+- repeat-purchase intervals: quantity bought over the days until the next purchase
 
 The rate calculation:
 - Recent observations weigh more (×0.75 per step back).
-- Observations outside ⅓–3× the median are dropped.
-- The weighted mean is the rate. Its coefficient of variation sets the confidence: high for 4+
-  observations with CV ≤ 0.35, medium for 2+ observations with CV ≤ 0.6, low otherwise.
+- Observations whose rate is outside ⅓–3× the median are dropped.
+- The rate is total weighted amount over total weighted days, so irregular gaps don't inflate it
+  the way averaging per-gap rates would. The spread of the individual rates sets the confidence:
+  high for 4+ observations with CV ≤ 0.35, medium for 2+ with CV ≤ 0.6, low otherwise.
+- Logged partial use (recipes, "used some") is incomplete by nature, so it only sets a floor on the
+  rate, or stands alone when there's nothing else.
 - With no observations, the category's typical days-per-purchase is used at low confidence.
 
-Remaining stock is projected forward from when its quantity was last observed
-(`quantityObservedAt`). That gives a run-out date with an earliest/latest range.
+Stock is projected item by item, oldest first: each item starts being used at the later of when it
+was last observed (`quantityObservedAt`, a count, or its purchase) and when the previous item runs
+out. The per-item result (`ItemEstimate`) drives "~½ gal left" in the list, "Finished?" for items
+projected at zero, and the product's run-out date with an earliest/latest range. Confirming
+"finished" logs no usage (the item ran out earlier, and purchases already carry the rate); a count
+pins the projection.
 
 **Shopping list.** `ShoppingListGenerator` suggests products predicted to run out within the
 look-ahead window (at medium confidence or better, or already marked low), plus regular purchases
@@ -119,7 +126,10 @@ that are probably out. It suggests the usual purchase amount.
 
 **Notifications.** iOS keeps only 64 pending local notifications. `NotificationPlanner` therefore
 merges reminders that fall on the same day into one notification, schedules at most 60, and skips
-reminders whose time has passed (the Soon tab covers those). The plan is recomputed:
+heads-up reminders whose time has passed (the Soon tab covers those). Toss reminders fire at the
+toss hour (6 PM by default) the day after an item's date; items that expired within the last week
+and are still in stock get the next toss time. Their "Tossed them" action is handled by the app
+delegate, which can run before any UI. The plan is recomputed:
 - when the app becomes active or goes to the background
 - in a `BGAppRefreshTask` (`com.munkeemann.larder.refresh`)
 - whenever reminder settings change
@@ -170,9 +180,38 @@ CloudKit compatibility rules, applied from day one:
 | `ShoppingListItem` | Shopping list entries, with a reason: predicted run-out, recipe, or manual. Optionally linked to a product. |
 | `SavedRecipe` | Favorite and cooked recipes, stored as JSON, with times cooked and last cooked date. |
 
-Household sharing: SwiftData's built-in CloudKit sync covers the private database only. Sharing
-across Apple IDs needs `CKShare`. The plan is to add a `CKSyncEngine` layer later. Stable UUIDs,
-timestamps and the append-only event logs are what make that practical.
+`SyncRecordState` is local bookkeeping for household sharing and is never shared itself.
+
+## Household sharing (CKSyncEngine)
+
+SwiftData's built-in CloudKit mirroring can't share across Apple IDs, so sharing is a separate
+layer (`Larder/Sync`) on top of an unchanged local store.
+
+- **Where the data lives.** The owner's inventory is a record zone (`LarderHome`) in their private
+  database, shared in full with a zone-wide `CKShare`. Participants read and write it through their
+  shared database. One `CKSyncEngine` per phone (private for the owner, shared for participants)
+  handles fetching, sending, retries, pushes and account changes.
+- **One record type.** Every shared object travels as a `LarderRecord` whose `payload` is a
+  `SyncEnvelope` (in `InventoryCore`): the object's fields as JSON, its references as
+  `(kind, UUID)` pairs, and a format version. The CloudKit schema never changes when a field is
+  added, and a phone running an older version carries unknown fields forward instead of erasing
+  them.
+- **Finding local changes by diffing.** Every few seconds while the app is open, and when it goes
+  to the background, `HomeSync` encodes every shared object canonically (sorted keys, dates as
+  reference-date seconds) and compares it with the payload iCloud last confirmed
+  (`SyncRecordState`). Differences become pending saves or deletes. This catches every write path,
+  including SwiftData cascades, with no hooks in the rest of the app.
+- **Applying remote changes.** Incoming records are applied in dependency order (locations and
+  products before items and events). A reference whose target hasn't arrived yet is kept in the
+  agreed payload and re-resolved after the fetch, so a half-synced phone never uploads it as
+  cleared.
+- **Conflicts.** Record-level last-writer-wins: a local edit that hasn't reached iCloud yet wins
+  if it's newer than the server's copy; otherwise the server's copy is applied.
+- **Joining.** A new participant fetches the home before uploading anything. Built-in locations,
+  and products with the same name and brand that were never shared before, merge into the
+  incoming records by adopting their IDs, so joining doesn't duplicate "Fridge" or "Whole Milk".
+- **Leaving.** Leaving (participant) or stopping sharing (owner) stops sync; everyone keeps a
+  copy of the inventory as it was.
 
 ## Phases
 
@@ -186,3 +225,6 @@ timestamps and the append-only event logs are what make that practical.
 4. Recipes: Claude suggestions prioritizing expiring items, filters, missing-to-shopping-list,
    cooked → usage events, favorites.
 5. Online orders: design only (see [ONLINE_ORDERS.md](ONLINE_ORDERS.md)).
+6. Household release: household sharing, shelf scanning with Claude vision, usage estimates from
+   purchase history with oldest-first stock projection, toss reminders, and a theme drawn from the
+   app icon.

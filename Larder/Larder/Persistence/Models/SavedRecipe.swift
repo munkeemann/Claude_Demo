@@ -22,6 +22,11 @@ final class SavedRecipe {
         self.createdAt = now
     }
 
+    /// An empty entry for the sync layer to fill in from a shared record.
+    init(id: UUID) {
+        self.id = id
+    }
+
     var recipe: Recipe? {
         try? JSONDecoder().decode(Recipe.self, from: payload)
     }

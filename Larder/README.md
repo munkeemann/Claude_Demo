@@ -4,7 +4,9 @@ An iPhone app that tracks household inventory (food and household goods), predic
 will expire or run out, and suggests recipes from what you have.
 
 - Swift + SwiftUI, iOS 17+, SwiftData, local-first
-- Claude (Anthropic Messages API) for receipt parsing and recipe suggestions, using your own API key
+- Household sharing through iCloud (CloudKit + `CKSyncEngine`)
+- Claude (Anthropic Messages API) for receipt parsing, shelf photos and recipe suggestions, using
+  your own API key
 - VisionKit / Vision for barcode, document and text scanning; OpenFoodFacts for barcode lookup
 
 See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for the design and
@@ -14,11 +16,63 @@ See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for the design and
 
 | Tab | What it does |
 |---|---|
-| Inventory | Items grouped by storage location, with search and filters. Swipe for used some / used up / tossed. Add items by hand, by barcode (Open Food Facts), or from a receipt (Claude). |
-| Soon | Items expiring soon, products predicted to run low (with confidence), and regulars you're probably out of. |
+| Inventory | Items grouped by storage location, with search and filters, and an estimate of what's left for items nobody logs. Swipe for used some / used up / tossed. Add items by hand, by barcode (Open Food Facts), from a receipt, or by photographing a whole shelf (Claude). |
+| Soon | Items expiring soon, items that are probably finished (confirm in one tap), products predicted to run low (with confidence), and regulars you're probably out of. |
 | Recipes | Claude suggestions built around what's in stock, expiring items first. Filter by meal, time and missing ingredients. Add missing items to the list in one tap. "I cooked this" logs usage. Favorites. |
 | Shopping | Suggested items from run-out predictions, plus your own entries. |
-| Settings | Claude API key and model, reminders and look-ahead, storage locations, sample data. |
+| Settings | Household sharing, Claude API key and model, reminders (including "toss it" reminders) and look-ahead, storage locations, sample data. |
+
+### How usage is estimated
+
+Nobody logs every glass of milk, so Larder learns mostly from what you buy: in the long run, what
+a household buys is what it uses. Each product's pace comes from the gaps between purchases (total
+bought over total time, weighted toward recent trips, outliers dropped), sharpened by any "used up"
+taps. Logged use from recipes and "used some" only raises the estimate, since it's always
+incomplete. Stock is then projected forward oldest-first, so three unlogged gallons bought a week
+apart count as one gallon, partly used. When a projection says something is gone, it shows up as
+"Finished?"; a tap confirms it, and a quick count ("How much is left?", or a shelf scan) resets
+the estimate. "Running low" reminders fire a few days before the projected run-out.
+
+### Reminders
+
+Turn reminders on in **Settings**. Besides heads-up reminders before items expire or run out,
+**toss reminders** arrive the evening after something passes its date (6 PM by default), with a
+**Tossed them** button that clears the items without opening the app. The app icon badge counts
+items past their date.
+
+### Scan a shelf
+
+**Inventory → + → Scan a Shelf**: photograph a shelf, the fridge or a cupboard. Claude lists what
+it sees with counts (or how full an opened container is), matches things already tracked at that
+location, and shows a review: new items to add, new counts for tracked ones, and tracked items that
+weren't in the photo (mark them finished if they're gone). By default a scan is a stock-take;
+switch on **I just bought these** after a shopping trip without a receipt so the purchases count
+toward usage estimates.
+
+## Household sharing
+
+Everyone in a home shares one inventory, shopping list and history, synced through iCloud. The
+owner's data lives in a record zone in their private CloudKit database, shared with a zone-wide
+`CKShare`; others join from an invitation link.
+
+**Settings → Household → Share Inventory…** creates the home and opens Apple's sharing sheet
+(Messages, Mail or a link). The other person taps the link on their iPhone, with Larder
+installed, and chooses whether to start from the shared inventory or add their own items to it.
+Reminders and the Claude API key stay per phone.
+
+One-time setup in Apple's developer tools (the app shows "iCloud sharing isn't set up" until it's
+done):
+1. **Certificates, Identifiers & Profiles → Identifiers → +** → **iCloud Containers** → identifier
+   `iCloud.com.munkeemann.larder`.
+2. Edit the App ID `com.munkeemann.larder`: enable **iCloud** (check **CloudKit**, then
+   **Configure** and select the container) and **Push Notifications**. Save.
+3. In [CloudKit Console](https://icloud.developer.apple.com) → the container → **Development** →
+   **Schema → Record Types → +**: create `LarderRecord` with two fields, `kind` (String) and
+   `payload` (String). Then **Deploy Schema Changes…** to Production. TestFlight builds use the
+   Production environment, so this step is required.
+
+The upload job checks that the signed app carries its iCloud and push entitlements before
+anything reaches TestFlight.
 
 ## Requirements
 
@@ -77,17 +131,18 @@ The Xcode project is generated and git-ignored. After pulling changes that add o
 run `xcodegen generate` again. Change project settings in `project.yml`, not in Xcode.
 
 To run on a device, set your team in `project.yml` (`DEVELOPMENT_TEAM`) or in Xcode's Signing
-settings. The camera features (barcode scanner, document camera) only work on a real device; the
-Simulator offers manual barcode entry and receipt paste/import instead.
+settings. The camera features (barcode scanner, document camera, shelf photos) only work on a real
+device; the Simulator offers manual barcode entry, receipt paste/import and photo-library picks
+instead.
 
 ## Claude features
 
-Receipt scanning and recipe suggestions call the Anthropic Messages API with your own key. In the app, open **Settings → Claude**, paste a key from
+Receipt scanning, shelf scanning and recipe suggestions call the Anthropic Messages API with your own key. In the app, open **Settings → Claude**, paste a key from
 [console.anthropic.com](https://console.anthropic.com), and tap **Test Connection**. The key is
 stored in the iOS Keychain (this device only). The model picker defaults to Claude Opus 5.
 
-Without a key you can still try **Scan Receipt → Try the Sample Receipt** and **Recipes → Suggest
-Recipes**. Both show pre-computed results for the bundled sample data (load it from
+Without a key you can still try **Scan Receipt → Try the Sample Receipt**, **Scan a Shelf → Try a
+Sample Shelf** and **Recipes → Suggest Recipes**. Both show pre-computed results for the bundled sample data (load it from
 **Settings → Load Sample Data**).
 
 ## Tests
@@ -110,7 +165,8 @@ xcodebuild test -project Larder.xcodeproj -scheme Larder \
 ```
 
 CI (`.github/workflows/larder-ios.yml`) runs the package tests on Linux and macOS and builds and
-tests the app on an iOS Simulator for every push that touches `Larder/`.
+tests the app on an iOS Simulator for every push that touches `Larder/`. On `main` and `claude/**`
+branches, a green run then uploads the build to TestFlight.
 
 ## Layout
 

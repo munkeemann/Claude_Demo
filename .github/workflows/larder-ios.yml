@@ -207,6 +207,52 @@ jobs:
             CURRENT_PROJECT_VERSION="$BUILD_NUMBER" \
             | xcbeautify --renderer github-actions
 
+      - name: Carry entitlements into the archive
+        # The archive is built unsigned. Distribution signing takes the app's
+        # entitlements (iCloud for household sharing, push for sync) from the
+        # archived app's signature, so give it an ad-hoc one that has them.
+        working-directory: Larder
+        run: |
+          APP="$RUNNER_TEMP/Larder.xcarchive/Products/Applications/Larder.app"
+          if [ -d "$APP/Frameworks" ]; then
+            find "$APP/Frameworks" -maxdepth 1 \( -name '*.framework' -o -name '*.dylib' \) \
+              -exec codesign --force --sign - --timestamp=none {} \;
+          fi
+          codesign --force --sign - --timestamp=none --entitlements Config/Larder.entitlements "$APP"
+          codesign -d --entitlements :- "$APP"
+
+      - name: Sign and check entitlements
+        # A trial export (no upload) proves the App Store-signed app keeps its
+        # entitlements before anything reaches TestFlight.
+        working-directory: Larder
+        run: |
+          set -o pipefail
+          cp Config/ExportOptions-TestFlight.plist "$RUNNER_TEMP/ExportOptions-check.plist"
+          plutil -replace destination -string export "$RUNNER_TEMP/ExportOptions-check.plist"
+          if ! xcodebuild -exportArchive \
+            -archivePath "$RUNNER_TEMP/Larder.xcarchive" \
+            -exportOptionsPlist "$RUNNER_TEMP/ExportOptions-check.plist" \
+            -exportPath "$RUNNER_TEMP/check" \
+            -allowProvisioningUpdates \
+            -authenticationKeyPath "$RUNNER_TEMP/asc/AuthKey.p8" \
+            -authenticationKeyID "$ASC_KEY_ID" \
+            -authenticationKeyIssuerID "$ASC_ISSUER_ID" \
+            | xcbeautify --renderer github-actions; then
+            echo "::error::Signing failed. If the log mentions iCloud or Push Notifications, enable both on the App ID com.munkeemann.larder (with the iCloud container iCloud.com.munkeemann.larder) in the Apple Developer portal, then rerun."
+            exit 1
+          fi
+          IPA="$(ls "$RUNNER_TEMP"/check/*.ipa | head -n 1)"
+          mkdir -p "$RUNNER_TEMP/ipa"
+          unzip -q "$IPA" -d "$RUNNER_TEMP/ipa"
+          ENTITLEMENTS="$(codesign -d --entitlements :- "$RUNNER_TEMP/ipa/Payload/Larder.app" 2>/dev/null)"
+          echo "$ENTITLEMENTS"
+          for needed in iCloud.com.munkeemann.larder CloudKit aps-environment; do
+            if ! printf '%s' "$ENTITLEMENTS" | grep -q "$needed"; then
+              echo "::error::The signed app is missing $needed. Household sharing would not work, so nothing was uploaded."
+              exit 1
+            fi
+          done
+
       - name: Sign and upload to App Store Connect
         working-directory: Larder
         run: |

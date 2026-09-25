@@ -1,3 +1,4 @@
+import CloudKit
 import SwiftUI
 
 struct RootView: View {
@@ -9,9 +10,10 @@ struct RootView: View {
         case settings
     }
 
-    @Bindable private var router = AppRouter.shared
+    private var homeSync: HomeSync { .shared }
 
     var body: some View {
+        @Bindable var router = AppRouter.shared
         TabView(selection: $router.selectedTab) {
             InventoryHomeView()
                 .tabItem { Label("Inventory", systemImage: "cabinet") }
@@ -35,6 +37,24 @@ struct RootView: View {
         }
         .tint(Theme.green)
         .fontDesign(.rounded)
+        .sheet(isPresented: Binding(
+            get: { homeSync.pendingInvitation != nil },
+            set: { if !$0 { homeSync.pendingInvitation = nil } }
+        )) {
+            if let metadata = homeSync.pendingInvitation {
+                JoinHomeView(metadata: metadata)
+                    .tint(Theme.green)
+                    .fontDesign(.rounded)
+            }
+        }
+        .alert(
+            "Household",
+            isPresented: Binding(get: { homeSync.notice != nil }, set: { if !$0 { homeSync.notice = nil } })
+        ) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text(homeSync.notice ?? "")
+        }
     }
 }
 

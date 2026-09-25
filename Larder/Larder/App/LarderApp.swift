@@ -19,6 +19,7 @@ struct LarderApp: App {
         } catch {
             assertionFailure("Launch maintenance failed: \(error)")
         }
+        HomeSync.shared.start(container: container)
     }
 
     var body: some Scene {
@@ -30,8 +31,10 @@ struct LarderApp: App {
         .onChange(of: scenePhase) { _, phase in
             switch phase {
             case .active:
+                HomeSync.shared.sceneDidBecomeActive()
                 Task { await Reminders.refresh(container: container) }
             case .background:
+                HomeSync.shared.sceneDidEnterBackground()
                 BackgroundRefresh.schedule()
                 Task { await Reminders.refresh(container: container) }
             default:

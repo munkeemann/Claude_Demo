@@ -12,11 +12,12 @@ enum Persistence {
         Receipt.self,
         ShoppingListItem.self,
         SavedRecipe.self,
+        SyncRecordState.self,
     ]
 
-    /// Creates the app's model container. CloudKit is explicitly off for now;
-    /// switching `cloudKitDatabase` to `.private("iCloud.<bundle id>")` (plus
-    /// the iCloud entitlement) is all the model layer needs for private sync.
+    /// Creates the app's model container. SwiftData's own CloudKit mirroring
+    /// stays off: it can't share with another iCloud account, so household
+    /// sharing runs through `HomeSync` (CKSyncEngine) instead.
     static func makeContainer(inMemory: Bool = false) throws -> ModelContainer {
         let schema = Schema(models)
         let configuration = ModelConfiguration(

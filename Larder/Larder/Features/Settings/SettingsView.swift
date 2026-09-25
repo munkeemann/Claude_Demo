@@ -28,6 +28,8 @@ struct SettingsView: View {
                     .listRowBackground(Color.clear)
                 }
 
+                HouseholdSettingsSection()
+
                 ClaudeSettingsSection()
 
                 RemindersSettingsSection()

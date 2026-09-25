@@ -1,3 +1,4 @@
+import CloudKit
 import InventoryCore
 import SwiftData
 import UIKit
@@ -38,6 +39,17 @@ final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCent
         return true
     }
 
+    /// Routes invitation links (CloudKit shares) to `SceneDelegate`.
+    func application(
+        _ application: UIApplication,
+        configurationForConnecting connectingSceneSession: UISceneSession,
+        options: UIScene.ConnectionOptions
+    ) -> UISceneConfiguration {
+        let configuration = UISceneConfiguration(name: nil, sessionRole: connectingSceneSession.role)
+        configuration.delegateClass = SceneDelegate.self
+        return configuration
+    }
+
     /// Show reminders even while Larder is open.
     func userNotificationCenter(
         _ center: UNUserNotificationCenter,
@@ -59,5 +71,20 @@ final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCent
         default:
             break
         }
+    }
+}
+
+/// Receives household invitations: tapping a Larder share link opens the
+/// app here, whether it was running or not.
+@MainActor
+final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
+    func scene(_ scene: UIScene, willConnectTo session: UISceneSession, options connectionOptions: UIScene.ConnectionOptions) {
+        if let metadata = connectionOptions.cloudKitShareMetadata {
+            HomeSync.shared.receive(metadata)
+        }
+    }
+
+    func windowScene(_ windowScene: UIWindowScene, userDidAcceptCloudKitShareWith cloudKitShareMetadata: CKShare.Metadata) {
+        HomeSync.shared.receive(cloudKitShareMetadata)
     }
 }
