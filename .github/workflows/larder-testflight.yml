@@ -29,7 +29,9 @@ concurrency:
 jobs:
   testflight:
     name: Archive and upload to TestFlight
-    runs-on: macos-15
+    # App Store Connect only accepts builds made with the iOS 26 SDK or later.
+    # macos-26 defaults to Xcode 26; the next step fails fast if that changes.
+    runs-on: macos-26
     timeout-minutes: 45
     env:
       ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
@@ -51,7 +53,14 @@ jobs:
           fi
 
       - name: Toolchain versions
-        run: xcodebuild -version
+        run: |
+          xcodebuild -version
+          xcodebuild -showsdks | grep -i iphoneos
+          major="$(xcodebuild -version | awk 'NR == 1 { split($2, v, "."); print v[1] }')"
+          if [ "$major" -lt 26 ]; then
+            echo "::error::App Store Connect requires Xcode 26 or later; this runner has Xcode $major."
+            exit 1
+          fi
 
       - name: Install XcodeGen and xcbeautify
         run: brew install xcodegen xcbeautify

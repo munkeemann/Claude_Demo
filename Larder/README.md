@@ -22,7 +22,8 @@ See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for the design and
 
 ## Requirements
 
-- Xcode 16 or later (Swift 6 toolchain)
+- Xcode 16 or later (Swift 6 toolchain) to build and run; App Store Connect uploads need Xcode 26,
+  which the TestFlight workflow uses
 - [XcodeGen](https://github.com/yonaskolb/XcodeGen): `brew install xcodegen`
 
 ## Run it in the Simulator (one command)

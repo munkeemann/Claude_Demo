@@ -31,7 +31,7 @@ jobs:
 
   app-macos:
     name: App build and tests (iOS Simulator)
-    runs-on: macos-15
+    runs-on: macos-26  # same Xcode as the TestFlight build
     timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
