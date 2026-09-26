@@ -1,0 +1,32 @@
+name: CloudKit schema
+
+# Prepares Larder's CloudKit schema for household sharing (see
+# .github/cloudkit/prepare-sharing.cjs). Runs when that folder or this file
+# changes; it never builds or uploads the app.
+on:
+  push:
+    branches: [main, "claude/**"]
+    paths:
+      - ".github/cloudkit/**"
+      - ".github/workflows/cloudkit-schema.yml"
+  workflow_dispatch:
+
+jobs:
+  prepare-sharing:
+    name: Add the share record type to the Development schema
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: .github/cloudkit
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - run: npm install --no-audit --no-fund
+      - name: Prepare the schema
+        env:
+          CLOUDKIT_MANAGEMENT_TOKEN: ${{ secrets.CLOUDKIT_MANAGEMENT_TOKEN }}
+          CLOUDKIT_USER_TOKEN: ${{ secrets.CLOUDKIT_USER_TOKEN }}
+        run: node prepare-sharing.cjs

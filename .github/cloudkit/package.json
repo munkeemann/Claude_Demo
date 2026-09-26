@@ -1,0 +1,9 @@
+{
+  "name": "larder-cloudkit-tools",
+  "private": true,
+  "description": "Prepares Larder's CloudKit schema with Apple's CKTool JS.",
+  "dependencies": {
+    "@apple/cktool.database": "1.3.2",
+    "@apple/cktool.target.nodejs": "1.3.2"
+  }
+}
