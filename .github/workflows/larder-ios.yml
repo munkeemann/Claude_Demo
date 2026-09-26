@@ -229,6 +229,7 @@ jobs:
           set -o pipefail
           cp Config/ExportOptions-TestFlight.plist "$RUNNER_TEMP/ExportOptions-check.plist"
           plutil -replace destination -string export "$RUNNER_TEMP/ExportOptions-check.plist"
+          # Unfiltered output: signing errors carry details xcbeautify drops.
           if ! xcodebuild -exportArchive \
             -archivePath "$RUNNER_TEMP/Larder.xcarchive" \
             -exportOptionsPlist "$RUNNER_TEMP/ExportOptions-check.plist" \
@@ -236,8 +237,17 @@ jobs:
             -allowProvisioningUpdates \
             -authenticationKeyPath "$RUNNER_TEMP/asc/AuthKey.p8" \
             -authenticationKeyID "$ASC_KEY_ID" \
-            -authenticationKeyIssuerID "$ASC_ISSUER_ID" \
-            | xcbeautify --renderer github-actions; then
+            -authenticationKeyIssuerID "$ASC_ISSUER_ID"; then
+            LOGS="$(ls -dt "${TMPDIR:-/tmp}"/Larder_*.xcdistributionlogs 2>/dev/null | head -n 1)"
+            if [ -n "$LOGS" ]; then
+              echo "::group::Distribution log ($LOGS)"
+              cat "$LOGS/IDEDistribution.standard.log" 2>/dev/null || true
+              echo "::endgroup::"
+              echo "::group::Errors from the verbose distribution log"
+              grep -iE "error|fail|denied|forbidden|capabilit|icloud|container|entitle|provision|401|403" \
+                "$LOGS/IDEDistribution.verbose.log" 2>/dev/null | tail -n 150 || true
+              echo "::endgroup::"
+            fi
             echo "::error::Signing failed. If the log mentions iCloud or Push Notifications, enable both on the App ID com.munkeemann.larder (with the iCloud container iCloud.com.munkeemann.larder) in the Apple Developer portal, then rerun."
             exit 1
           fi
