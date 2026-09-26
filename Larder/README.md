@@ -99,8 +99,15 @@ After pulling new changes, run `Larder/scripts/run-simulator.sh` again from the 
 
 Builds reach TestFlight automatically. Every push to `main` or a `claude/**` branch that changes
 the app runs the **Larder iOS** workflow (`.github/workflows/larder-ios.yml`) on GitHub's macOS
-runners. When the tests pass, its **Upload to TestFlight** job archives a release build, signs it
-with Apple's cloud-managed certificate and uploads it. No Mac is needed at any point.
+runners. When the tests pass, its **Upload to TestFlight** job archives a release build and signs
+and uploads it. No Mac is needed at any point.
+
+Apple's cloud-managed signing can't provision an app that uses iCloud when it's driven by an API
+key, so each build signs with its own temporary Apple Distribution certificate and App Store
+profile, created through the App Store Connect API (`scripts/asc_signing.py`). After Apple finishes
+processing the build, the job revokes the certificate and deletes the profile, so nothing
+accumulates in the developer account. Apple may email the account holder about these
+certificates.
 
 One-time setup:
 1. In App Store Connect → Apps → **+ New App**, create "Larder" with bundle ID
@@ -110,14 +117,14 @@ One-time setup:
    - `ASC_ISSUER_ID`: the issuer ID
    - `ASC_KEY_P8`: the full contents of the `.p8` file
 
-   All three come from the App Store Connect API key (Users and Access → Integrations). Cloud
-   signing needs a key with the Admin role.
+   All three come from the App Store Connect API key (Users and Access → Integrations). Creating
+   certificates needs a key with the Admin role.
 3. In App Store Connect → TestFlight, create an **Internal Testing** group with automatic
    distribution on, and add the testers. In the TestFlight app on each phone, turn on
    **Automatic Updates** for Larder.
 
 After a push, a build shows up in TestFlight about 30–45 minutes later (tests, upload, then Apple's
-processing). Docs-only changes don't upload a build. To upload one without a code change, bump the
+processing; the job waits for processing before revoking its certificate). Docs-only changes don't upload a build. To upload one without a code change, bump the
 number in `Larder/Config/testflight-build.txt` and push. The build number is the workflow run
 number, so it always increases.
 

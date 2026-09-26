@@ -115,7 +115,7 @@ jobs:
       (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/heads/claude/'))
     # App Store Connect only accepts builds made with the iOS 26 SDK or later.
     runs-on: macos-26
-    timeout-minutes: 45
+    timeout-minutes: 90
     env:
       ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
       ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
@@ -221,34 +221,68 @@ jobs:
           codesign --force --sign - --timestamp=none --entitlements Config/Larder.entitlements "$APP"
           codesign -d --entitlements :- "$APP"
 
+      - name: Set up the App Store Connect helper
+        run: |
+          python3 -m venv "$RUNNER_TEMP/venv"
+          "$RUNNER_TEMP/venv/bin/pip" install --quiet --disable-pip-version-check pyjwt cryptography
+
+      - name: Create a temporary signing certificate and profile
+        # Cloud-managed signing can't provision iCloud apps from an API key,
+        # so each build gets its own Apple Distribution certificate and App
+        # Store profile. "Revoke the temporary certificate" removes both.
+        env:
+          ASC_KEY_PATH: ${{ runner.temp }}/asc/AuthKey.p8
+        run: |
+          "$RUNNER_TEMP/venv/bin/python" Larder/scripts/asc_signing.py prepare \
+            --out "$RUNNER_TEMP/signing" \
+            --bundle-id com.munkeemann.larder \
+            --profile-name "Larder CI build $BUILD_NUMBER attempt $GITHUB_RUN_ATTEMPT"
+
+      - name: Install the signing identity and profile
+        run: |
+          KEYCHAIN="$RUNNER_TEMP/signing/larder.keychain-db"
+          KEYCHAIN_PASSWORD="$(openssl rand -hex 16)"
+          security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN"
+          security set-keychain-settings -lut 21600 "$KEYCHAIN"
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN"
+          curl -fsSL -o "$RUNNER_TEMP/signing/AppleWWDRCAG3.cer" https://www.apple.com/certificateauthority/AppleWWDRCAG3.cer
+          security import "$RUNNER_TEMP/signing/AppleWWDRCAG3.cer" -k "$KEYCHAIN" -A || true
+          security import "$RUNNER_TEMP/signing/signing.p12" -k "$KEYCHAIN" -f pkcs12 -A \
+            -P "$(cat "$RUNNER_TEMP/signing/p12-password")" -T /usr/bin/codesign -T /usr/bin/security
+          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN" > /dev/null
+          security list-keychains -d user -s "$KEYCHAIN" $(security list-keychains -d user | tr -d '"')
+          security find-identity -v -p codesigning "$KEYCHAIN"
+          UUID="$(python3 -c "import json; print(json.load(open('$RUNNER_TEMP/signing/state.json'))['profileUuid'])")"
+          for dir in "$HOME/Library/MobileDevice/Provisioning Profiles" "$HOME/Library/Developer/Xcode/UserData/Provisioning Profiles"; do
+            mkdir -p "$dir"
+            cp "$RUNNER_TEMP/signing/profile.mobileprovision" "$dir/$UUID.mobileprovision"
+          done
+          security cms -D -i "$RUNNER_TEMP/signing/profile.mobileprovision" | plutil -extract Entitlements xml1 -o - - || true
+
       - name: Sign and check entitlements
         # A trial export (no upload) proves the App Store-signed app keeps its
         # entitlements before anything reaches TestFlight.
         working-directory: Larder
         run: |
-          set -o pipefail
-          cp Config/ExportOptions-TestFlight.plist "$RUNNER_TEMP/ExportOptions-check.plist"
-          plutil -replace destination -string export "$RUNNER_TEMP/ExportOptions-check.plist"
-          # Unfiltered output: signing errors carry details xcbeautify drops.
+          "$RUNNER_TEMP/venv/bin/python" scripts/asc_signing.py export-options \
+            --state "$RUNNER_TEMP/signing/state.json" --destination export \
+            --team-id NX8A5B7T82 --bundle-id com.munkeemann.larder \
+            --out "$RUNNER_TEMP/ExportOptions-check.plist"
           if ! xcodebuild -exportArchive \
             -archivePath "$RUNNER_TEMP/Larder.xcarchive" \
             -exportOptionsPlist "$RUNNER_TEMP/ExportOptions-check.plist" \
             -exportPath "$RUNNER_TEMP/check" \
-            -allowProvisioningUpdates \
             -authenticationKeyPath "$RUNNER_TEMP/asc/AuthKey.p8" \
             -authenticationKeyID "$ASC_KEY_ID" \
             -authenticationKeyIssuerID "$ASC_ISSUER_ID"; then
             LOGS="$(ls -dt "${TMPDIR:-/tmp}"/Larder_*.xcdistributionlogs 2>/dev/null | head -n 1)"
             if [ -n "$LOGS" ]; then
-              echo "::group::Distribution log ($LOGS)"
-              cat "$LOGS/IDEDistribution.standard.log" 2>/dev/null || true
-              echo "::endgroup::"
-              echo "::group::Errors from the verbose distribution log"
-              grep -iE "error|fail|denied|forbidden|capabilit|icloud|container|entitle|provision|401|403" \
+              echo "::group::Errors from the distribution log"
+              grep -iE "error|fail|denied|forbidden|capabilit|icloud|container|entitle|provision" \
                 "$LOGS/IDEDistribution.verbose.log" 2>/dev/null | tail -n 150 || true
               echo "::endgroup::"
             fi
-            echo "::error::Signing failed. If the log mentions iCloud or Push Notifications, enable both on the App ID com.munkeemann.larder (with the iCloud container iCloud.com.munkeemann.larder) in the Apple Developer portal, then rerun."
+            echo "::error::Signing failed. If the log mentions iCloud or Push Notifications, check that both are enabled on the App ID com.munkeemann.larder, with the iCloud container iCloud.com.munkeemann.larder selected."
             exit 1
           fi
           IPA="$(ls "$RUNNER_TEMP"/check/*.ipa | head -n 1)"
@@ -264,19 +298,44 @@ jobs:
           done
 
       - name: Sign and upload to App Store Connect
+        id: upload
         working-directory: Larder
         run: |
           set -o pipefail
+          "$RUNNER_TEMP/venv/bin/python" scripts/asc_signing.py export-options \
+            --state "$RUNNER_TEMP/signing/state.json" --destination upload \
+            --team-id NX8A5B7T82 --bundle-id com.munkeemann.larder \
+            --out "$RUNNER_TEMP/ExportOptions-upload.plist"
           xcodebuild -exportArchive \
             -archivePath "$RUNNER_TEMP/Larder.xcarchive" \
-            -exportOptionsPlist Config/ExportOptions-TestFlight.plist \
+            -exportOptionsPlist "$RUNNER_TEMP/ExportOptions-upload.plist" \
             -exportPath "$RUNNER_TEMP/export" \
-            -allowProvisioningUpdates \
             -authenticationKeyPath "$RUNNER_TEMP/asc/AuthKey.p8" \
             -authenticationKeyID "$ASC_KEY_ID" \
             -authenticationKeyIssuerID "$ASC_ISSUER_ID" \
             | xcbeautify --renderer github-actions
-          echo "Uploaded build $BUILD_NUMBER. It appears in TestFlight after Apple finishes processing (usually 10–30 minutes)."
+          echo "Uploaded build $BUILD_NUMBER."
+
+      - name: Wait for App Store Connect to process the build
+        # The certificate is revoked afterwards, so let Apple finish with the
+        # build first. Usually 5–20 minutes.
+        if: steps.upload.outcome == 'success'
+        env:
+          ASC_KEY_PATH: ${{ runner.temp }}/asc/AuthKey.p8
+        run: |
+          "$RUNNER_TEMP/venv/bin/python" Larder/scripts/asc_signing.py wait \
+            --bundle-id com.munkeemann.larder --build-number "$BUILD_NUMBER" --timeout 2400
+
+      - name: Revoke the temporary certificate
+        if: always()
+        env:
+          ASC_KEY_PATH: ${{ runner.temp }}/asc/AuthKey.p8
+        run: |
+          if [ -f "$RUNNER_TEMP/signing/state.json" ]; then
+            "$RUNNER_TEMP/venv/bin/python" Larder/scripts/asc_signing.py cleanup --state "$RUNNER_TEMP/signing/state.json"
+          fi
+          security delete-keychain "$RUNNER_TEMP/signing/larder.keychain-db" 2>/dev/null || true
+          rm -rf "$RUNNER_TEMP/signing"
 
       - name: Remove API key
         if: always()
