@@ -123,7 +123,7 @@ async function viaShare() {
 
 (async () => {
   if (!managementToken) {
-    console.log("::error::Add the CLOUDKIT_MANAGEMENT_TOKEN repository secret (CloudKit Console → Tokens & Keys → Management Tokens).");
+    console.log("::error::Add the CLOUDKIT_MANAGEMENT_TOKEN repository secret (CloudKit Console home → account menu → Manage Tokens; it is account-wide, not under a container).");
     process.exit(1);
   }
   let ready = await viaImport();
