@@ -43,6 +43,33 @@ struct ShelfScanTests {
         #expect(item.confidence == .medium)
     }
 
+    @Test func areasAndPlaceAreOptional() throws {
+        let json = """
+        {"items":[{"name":"Limes","category":"produce","quantity":3,"unit":"each","confidence":"high"}],"place":"garage"}
+        """
+        let result = try JSONDecoder().decode(ShelfScanResult.self, from: Data(json.utf8))
+        #expect(result.items.map(\.name) == ["Limes"])
+        #expect(result.areas.isEmpty)
+        #expect(result.place == nil)
+    }
+
+    @Test func areasAreWrittenBeforeItems() throws {
+        // Structured output follows the schema's property order, and requests
+        // are sent with sorted keys: Claude surveys the photo, then lists.
+        let json = try #require(String(data: try ShelfScanSchema.schema.encoded(), encoding: .utf8))
+        let areas = try #require(json.range(of: "\"areas\""))
+        let items = try #require(json.range(of: "\"items\""))
+        #expect(areas.lowerBound < items.lowerBound)
+    }
+
+    @Test func flagsAPhotoOfSomewhereElse() {
+        let fridge = ShelfScanResult(items: [], place: .fridge)
+        #expect(fridge.mismatchedPlace(comparedTo: .room) == .fridge)
+        #expect(fridge.mismatchedPlace(comparedTo: .fridge) == nil)
+        #expect(fridge.mismatchedPlace(comparedTo: nil) == nil)
+        #expect(ShelfScanResult(items: []).mismatchedPlace(comparedTo: .room) == nil)
+    }
+
     @Test func sampleRoundTrips() throws {
         let data = try JSONEncoder().encode(SampleShelfScan.result)
         #expect(try JSONDecoder().decode(ShelfScanResult.self, from: data) == SampleShelfScan.result)
@@ -58,7 +85,7 @@ struct ShelfScanTests {
             hints: [hint("i1", "Whole Milk", brand: "Horizon", quantity: 1, unit: .gallon)]
         )
         let text = ShelfScanPrompt.userText(for: input)
-        #expect(text.contains("This photo is of the Fridge (fridge temperature)."))
+        #expect(text.contains("Picked location: Fridge (fridge temperature)."))
         #expect(text.contains("- i1: Whole Milk (Horizon), last recorded 1 gal, unit gal"))
     }
 

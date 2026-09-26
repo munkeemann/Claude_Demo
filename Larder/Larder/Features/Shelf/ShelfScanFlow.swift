@@ -14,6 +14,9 @@ struct ShelfScanFlow: View {
     @State private var locationID: UUID?
     @State private var stage: Stage = .chooseSource
     @State private var review: ShelfScanReview?
+    /// A better-fitting location, when the photo shows a different kind of
+    /// storage from the one picked (a fridge shot filed under Pantry).
+    @State private var suggestedLocationID: UUID?
     @State private var photo: UIImage?
     @State private var isShowingCamera = false
     @State private var photoItem: PhotosPickerItem?
@@ -51,7 +54,7 @@ struct ShelfScanFlow: View {
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                 case .review:
                     if let binding = Binding($review) {
-                        ShelfScanReviewView(review: binding, photo: photo, onImport: importReview)
+                        ShelfScanReviewView(review: binding, photo: photo, suggestion: suggestion, onImport: importReview)
                     }
                 case .failed(let message):
                     ContentUnavailableView {
@@ -189,12 +192,28 @@ struct ShelfScanFlow: View {
                     return
                 }
                 review = ShelfScanReview(result: result, hints: hints, locationID: locationID)
+                suggestedLocationID = result.mismatchedPlace(comparedTo: location?.climate).flatMap { place in
+                    (locations.first(where: { $0.isBuiltIn && $0.climate == place }) ?? locations.first(where: { $0.climate == place }))?.id
+                }
                 stage = .review
             } catch is CancellationError {
                 stage = .chooseSource
             } catch {
                 stage = .failed(error.localizedDescription)
             }
+        }
+    }
+
+    private var suggestion: ShelfScanReviewView.LocationSuggestion? {
+        guard
+            let suggested = locations.first(where: { $0.id == suggestedLocationID }),
+            let picked = locations.first(where: { $0.id == locationID })
+        else { return nil }
+        return .init(name: suggested.name, systemImage: suggested.systemImage, pickedName: picked.name) {
+            locationID = suggested.id
+            suggestedLocationID = nil
+            // Same photo, compared with what's tracked at the new location.
+            start(image: photo, llm: photo == nil ? environment.demoLLM : nil)
         }
     }
 

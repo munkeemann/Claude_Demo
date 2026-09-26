@@ -2,10 +2,31 @@ import Foundation
 
 /// What Claude sees in a photo of a shelf, fridge or cupboard.
 public struct ShelfScanResult: Codable, Sendable, Equatable {
+    /// Claude's walk through the photo, one line per shelf, door shelf or
+    /// bin, written before `items` so nothing gets skipped.
+    public var areas: [String]
     public var items: [ShelfScanItem]
+    /// The kind of storage the photo shows, when it's clear.
+    public var place: StorageClimate?
 
-    public init(items: [ShelfScanItem]) {
+    public init(areas: [String] = [], items: [ShelfScanItem], place: StorageClimate? = nil) {
+        self.areas = areas
         self.items = items
+        self.place = place
+    }
+
+    public init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        areas = (try? container.decodeIfPresent([String].self, forKey: .areas)) ?? []
+        items = try container.decode([ShelfScanItem].self, forKey: .items)
+        place = try? container.decodeIfPresent(StorageClimate.self, forKey: .place)
+    }
+
+    /// Where the photo seems to be, when that's a different kind of storage
+    /// from the location the person picked.
+    public func mismatchedPlace(comparedTo climate: StorageClimate?) -> StorageClimate? {
+        guard let place, let climate, place != climate else { return nil }
+        return place
     }
 }
 
@@ -115,8 +136,18 @@ public struct ShelfScanInput: Sendable, Equatable {
 // MARK: - Schema
 
 public enum ShelfScanSchema {
+    /// Requests are sent with sorted keys, so Claude writes `areas` before
+    /// `items`: it takes stock of each part of the photo, then lists.
     public static let schema: JSONValue = JSONSchema.object([
-        ("items", JSONSchema.array(of: item, description: "Every distinct product visible, one entry per product.")),
+        ("areas", JSONSchema.array(
+            of: JSONSchema.string(),
+            description: "One line per area of the photo (each shelf, door shelf, drawer or bin; top to bottom, left to right) naming everything in it, e.g. 'Top door shelf: ketchup, yellow mustard, 2 hot sauces, soy sauce'."
+        )),
+        ("items", JSONSchema.array(of: item, description: "Every distinct product from areas, one entry per product.")),
+        ("place", JSONSchema.nullable(JSONSchema.enumeration(
+            StorageClimate.allCases.map(\.rawValue),
+            description: "What the photo shows: 'fridge', 'freezer', or 'room' for a pantry, cupboard or shelf. Null if unclear."
+        ))),
     ])
 
     static let item: JSONValue = JSONSchema.object([
@@ -139,13 +170,30 @@ public enum ShelfScanPrompt {
     /// Stable instructions; the per-scan details go in the user message.
     public static let system = """
     You take stock of a household's food and household goods from a photo of a shelf, pantry, \
-    fridge, freezer or cupboard, for a home inventory app. The result replaces manual entry, so \
-    accuracy matters more than completeness: list what you can actually see.
+    fridge, freezer or cupboard, for a home inventory app. The result replaces typing everything \
+    in by hand. The person checks every entry before anything is saved and can untick a wrong \
+    guess in one tap, but has to type in anything you miss, so be thorough: list everything.
 
-    Rules:
-    - One entry per distinct product. Identical packages side by side are one entry with a count.
-    - Ignore anything that isn't food, drink or a household consumable: shelves, appliances, \
-    containers of unknown contents, decorations.
+    How to look:
+    - Fill in areas first. Go over the photo one area at a time (each shelf, door shelf, drawer \
+    and bin, top to bottom, left to right) and name everything in it, including things at the \
+    edges, behind other things, lying down, or only partly in frame. Then write items from those \
+    notes: everything named in areas belongs in items.
+    - Fridge doors and small shelves are crowded. Expect many bottles, jars and tubs of \
+    condiments, sauces, dressings, spreads and drinks, and check each one.
+
+    What to list:
+    - Every food, drink and household consumable: packaged goods, loose and bagged produce, \
+    condiments and sauces, jars, bottles, cartons, tubs, butter, eggs, leftovers, drinks.
+    - Skip only the fixtures: shelves, bins, the appliance itself, magnets and decorations.
+    - A container you can't read: name it from what it looks like (a small bottle of red sauce \
+    is probably hot sauce, a clear tub of chunky red dip "Salsa", a foil-wrapped stick "Butter", \
+    a takeout container "Leftovers") with confidence "low". Never leave something out because \
+    you're unsure what it is.
+    - One entry per distinct product. Identical packages side by side are one entry with a \
+    count; different flavors, varieties or brands are separate entries.
+
+    Amounts:
     - quantity/unit: choose what makes consumption easy to track.
       - Packaged goods: the number of packages with the container word (can, jar, box, bag, \
     bottle, pack, roll) or "each", and the size of one package in packageSize.
@@ -156,21 +204,27 @@ public enum ShelfScanPrompt {
     - fillLevel: only for a single opened or see-through container (a half-empty milk jug, a \
     jar of peanut butter). Then quantity/unit describe the full container: a 1-gallon jug that's \
     half full is quantity 1, unit "gal", fillLevel 0.5. Null for sealed packages and counts.
-    - Items partly hidden: count what's visible and use confidence "low".
-    - confidence: "high" when the label or shape is unmistakable, "low" when you're guessing.
-    - shelfLifeDays: for perishable food, typical days until it spoils where it's kept, \
-    unopened. Null for shelf-stable food and household goods.
-    - If "Already tracked here" lists items, they are this household's inventory at this \
+    - Items partly hidden: count what's visible.
+
+    Other fields:
+    - confidence: "high" when the label or shape is unmistakable, "medium" when you're fairly \
+    sure, "low" when you're guessing or the item is mostly hidden.
+    - shelfLifeDays: for perishable food, typical days until it spoils where the photo shows it \
+    kept, unopened. Null for shelf-stable food and household goods.
+    - place: the kind of storage in the photo, which may differ from the location the person \
+    picked. List everything either way.
+    - If "Already tracked here" lists items, they are this household's inventory at the picked \
     location. When an entry is clearly the same product as one of them, set inventoryRef to its \
     reference and report how much is there now, in that item's unit when you can. Never reuse a \
-    reference for two entries. Leave inventoryRef null when unsure.
+    reference for two entries. Leave inventoryRef null when unsure. Tracked items that aren't in \
+    the photo are fine to leave out; the list never limits what you report.
     """
 
     /// The text that follows the image.
     public static func userText(for input: ShelfScanInput) -> String {
         var sections: [String] = []
         if let name = input.locationName {
-            var place = "This photo is of the \(name)"
+            var place = "Picked location: \(name)"
             if let climate = input.climate { place += " (\(climate.rawValue) temperature)" }
             sections.append(place + ".")
         }
@@ -181,7 +235,7 @@ public enum ShelfScanPrompt {
             }
             sections.append("Already tracked here:\n" + lines.joined(separator: "\n"))
         }
-        sections.append("List what's in the photo.")
+        sections.append("Take stock of everything in the photo.")
         return sections.joined(separator: "\n\n")
     }
 

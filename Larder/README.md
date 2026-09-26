@@ -42,10 +42,13 @@ items past their date.
 
 ### Scan a shelf
 
-**Inventory → + → Scan a Shelf**: photograph a shelf, the fridge or a cupboard. Claude lists what
-it sees with counts (or how full an opened container is), matches things already tracked at that
-location, and shows a review: new items to add, new counts for tracked ones, and tracked items that
-weren't in the photo (mark them finished if they're gone). By default a scan is a stock-take;
+**Inventory → + → Scan a Shelf**: photograph a shelf, the fridge or a cupboard. Claude goes over
+the photo shelf by shelf, lists everything it sees with counts (or how full an opened container
+is), guessing at unlabeled jars and tubs rather than skipping them, matches things already tracked
+at that location, and shows a review: new items to add, new counts for tracked ones, and tracked
+items that weren't in the photo (mark them finished if they're gone). If the photo looks like a
+different kind of storage from the location you picked (a fridge door filed under Pantry), the
+review offers to scan again for the right one. By default a scan is a stock-take;
 switch on **I just bought these** after a shopping trip without a receipt so the purchases count
 toward usage estimates.
 

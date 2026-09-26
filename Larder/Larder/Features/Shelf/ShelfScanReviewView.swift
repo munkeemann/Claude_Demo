@@ -4,12 +4,29 @@ import SwiftUI
 /// Confirm what Claude saw on the shelf: new items to add, new counts for
 /// tracked ones, and tracked items that weren't in the photo.
 struct ShelfScanReviewView: View {
+    /// Offers to scan again against a location that fits the photo better.
+    struct LocationSuggestion {
+        var name: String
+        var systemImage: String
+        var pickedName: String
+        var rescan: () -> Void
+    }
+
     @Binding var review: ShelfScanReview
     let photo: UIImage?
+    var suggestion: LocationSuggestion? = nil
     var onImport: () -> Void
 
     private var changeCount: Int {
         review.includedLines.count + review.unseen.filter(\.markFinished).count
+    }
+
+    private var foundSummary: String {
+        switch review.lines.count {
+        case 0: "Claude didn't find any products in the photo."
+        case 1: "Claude found 1 product. Tap it to fix it, or swipe to skip it."
+        case let count: "Claude found \(count) products. Tap one to fix it, or swipe to skip it."
+        }
     }
 
     private var hasAdds: Bool { review.lines.contains { $0.action == .add } }
@@ -26,6 +43,24 @@ struct ShelfScanReviewView: View {
                         .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
                         .listRowInsets(EdgeInsets())
                         .listRowBackground(Color.clear)
+                } footer: {
+                    Text(foundSummary)
+                }
+            }
+
+            if let suggestion {
+                Section {
+                    VStack(alignment: .leading, spacing: 10) {
+                        Label("This looks like your \(suggestion.name)", systemImage: suggestion.systemImage)
+                            .font(.headline)
+                            .foregroundStyle(Theme.honeyInk)
+                        Text("You picked \(suggestion.pickedName). Scan again to compare with what's tracked in the \(suggestion.name) and file new items there.")
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                        Button("Scan Again for \(suggestion.name)", action: suggestion.rescan)
+                            .buttonStyle(.borderedProminent)
+                    }
+                    .padding(.vertical, 4)
                 }
             }
 
