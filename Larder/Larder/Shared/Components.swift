@@ -120,6 +120,8 @@ struct FilterChip: View {
     let isSelected: Bool
     let action: () -> Void
 
+    @Environment(\.colorScheme) private var colorScheme
+
     var body: some View {
         Button(action: action) {
             HStack(spacing: 4) {
@@ -131,12 +133,23 @@ struct FilterChip: View {
             .font(.subheadline.weight(.medium))
             .padding(.horizontal, 12)
             .padding(.vertical, 6)
-            .foregroundStyle(isSelected ? Theme.cream : Theme.greenDeep)
-            .background(isSelected ? AnyShapeStyle(Theme.brandGradient) : AnyShapeStyle(Theme.card), in: Capsule())
+            .foregroundStyle(textColor)
+            .background(fill, in: Capsule())
             .overlay(Capsule().strokeBorder(Theme.green.opacity(isSelected ? 0 : 0.25)))
         }
         .buttonStyle(.plain)
         .accessibilityAddTraits(isSelected ? .isSelected : [])
+    }
+
+    // A selected chip is green on a cream page and cream on a green one.
+    private var textColor: Color {
+        guard isSelected else { return Theme.greenDeep }
+        return colorScheme == .dark ? Theme.labelGreen : Theme.cream
+    }
+
+    private var fill: AnyShapeStyle {
+        guard isSelected else { return AnyShapeStyle(Theme.card) }
+        return colorScheme == .dark ? AnyShapeStyle(Theme.cream) : AnyShapeStyle(Theme.brandGradient)
     }
 }
 

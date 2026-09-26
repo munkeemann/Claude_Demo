@@ -3,11 +3,15 @@ import UIKit
 
 /// Colors and styling taken from the app icon: a green jar label, a cream
 /// jar and a honey lid. Every color has a dark-mode variant in the asset
-/// catalog.
+/// catalog. In light mode pages are cream; in dark mode they're the icon's
+/// green, with cream text and dark cards.
 enum Theme {
     static let green = Color.accentColor
-    /// The jar label's deep green. Titles and emphasis text.
+    /// The jar label's deep green. Emphasis text on cards.
     static let greenDeep = Color("LarderGreenDeep")
+    /// Titles and headings that sit on the page: deep green on cream, cream
+    /// on the dark-mode green.
+    static let heading = Color("LarderHeading")
     static let background = Color("LarderBackground")
     static let card = Color("LarderCard")
     static let honey = Color("LarderHoney")
@@ -23,12 +27,14 @@ enum Theme {
     )
     /// Cream from the jar, for text on the brand gradient.
     static let cream = Color(red: 0.980, green: 0.953, blue: 0.878)
+    /// The jar label's deep green in both modes, for text on cream.
+    static let labelGreen = Color(red: 0.161, green: 0.361, blue: 0.196)
 
-    /// Navigation titles in the label green, set in the rounded face the
+    /// Navigation titles in the heading color, set in the rounded face the
     /// rest of the app uses.
     @MainActor
     static func applyAppearance() {
-        let titleColor = UIColor(named: "LarderGreenDeep") ?? .label
+        let titleColor = UIColor(named: "LarderHeading") ?? .label
         let appearance = UINavigationBar.appearance()
         appearance.largeTitleTextAttributes = [
             .foregroundColor: titleColor,
@@ -50,15 +56,35 @@ extension UIFont {
 }
 
 extension View {
-    /// Cream page background behind lists and forms.
+    /// The page background behind lists and forms: cream, or the icon's
+    /// green in dark mode.
     func themedBackground() -> some View {
-        scrollContentBackground(.hidden)
-            .background(Theme.background.ignoresSafeArea())
+        modifier(ThemedBackground())
     }
 }
 
-/// A rounded card on the brand gradient, like the icon.
+private struct ThemedBackground: ViewModifier {
+    @Environment(\.colorScheme) private var colorScheme
+
+    @ViewBuilder
+    func body(content: Content) -> some View {
+        let page = content
+            .scrollContentBackground(.hidden)
+            .background(Theme.background.ignoresSafeArea())
+        if colorScheme == .dark {
+            // System gray section headers and footers are hard to read on
+            // the green, so text defaults to cream (rows stay dark cards).
+            page.foregroundStyle(Theme.cream, Theme.cream.opacity(0.88))
+        } else {
+            page
+        }
+    }
+}
+
+/// A rounded card on the brand gradient, like the icon. In dark mode the
+/// page is already that green, so the card is dark instead.
 struct BrandCard<Content: View>: View {
+    @Environment(\.colorScheme) private var colorScheme
     @ViewBuilder var content: Content
 
     var body: some View {
@@ -66,7 +92,11 @@ struct BrandCard<Content: View>: View {
             .foregroundStyle(Theme.cream)
             .padding(16)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .background(Theme.brandGradient, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+            .background(fill, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+    }
+
+    private var fill: AnyShapeStyle {
+        colorScheme == .dark ? AnyShapeStyle(Theme.card) : AnyShapeStyle(Theme.brandGradient)
     }
 }
 

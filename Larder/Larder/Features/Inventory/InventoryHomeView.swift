@@ -71,7 +71,7 @@ struct InventoryHomeView: View {
                 VStack(spacing: 12) {
                     LarderMark(size: 88)
                     Text("Nothing tracked yet")
-                        .foregroundStyle(Theme.greenDeep)
+                        .foregroundStyle(Theme.heading)
                 }
             } description: {
                 Text("Photograph a shelf, scan a receipt or barcode, or add items by hand. You can also load sample data to explore.")
@@ -131,7 +131,7 @@ struct InventoryHomeView: View {
                         }
                     } header: {
                         Label(section.title, systemImage: section.systemImage)
-                            .foregroundStyle(Theme.greenDeep)
+                            .foregroundStyle(Theme.heading)
                     }
                 }
             }
