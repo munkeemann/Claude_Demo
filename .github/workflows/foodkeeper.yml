@@ -25,8 +25,16 @@ jobs:
           mkdir -p .github/foodkeeper/raw
           ua="Mozilla/5.0 (Macintosh; Intel Mac OS X 14_0) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Safari/605.1.15"
           got=""
+          # USDA's servers refuse most cloud machines, so archived copies of
+          # the same file are tried too.
+          snapshot=$(curl -sS "https://archive.org/wayback/available?url=fsis.usda.gov/shared/data/EN/foodkeeper.json" \
+            | python3 -c "import sys,json; print(json.load(sys.stdin).get('archived_snapshots',{}).get('closest',{}).get('timestamp',''))" || true)
+          echo "Closest archived snapshot: ${snapshot:-none}"
           for url in \
             "https://www.fsis.usda.gov/shared/data/EN/foodkeeper.json" \
+            ${snapshot:+"https://web.archive.org/web/${snapshot}id_/https://www.fsis.usda.gov/shared/data/EN/foodkeeper.json"} \
+            "https://web.archive.org/web/2025id_/https://www.fsis.usda.gov/shared/data/EN/foodkeeper.json" \
+            "https://web.archive.org/web/2023id_/https://www.fsis.usda.gov/shared/data/EN/foodkeeper.json" \
             "https://www.fsis.usda.gov/shared/data/EN/FoodKeeper.json" \
             "https://www.foodsafety.gov/sites/default/files/foodkeeper.json"; do
             code=$(curl -sSL -A "$ua" -o /tmp/fk.json -w "%{http_code}" "$url" || echo "000")
