@@ -1,0 +1,129 @@
+import InventoryCore
+import SwiftData
+import SwiftUI
+
+struct SettingsView: View {
+    @Environment(\.modelContext) private var modelContext
+    @State private var isConfirmingDelete = false
+    @State private var statusMessage: String?
+    @State private var errorMessage: String?
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section {
+                    BrandCard {
+                        HStack(spacing: 14) {
+                            LarderMark(size: 52)
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("Larder")
+                                    .font(.title3.weight(.bold))
+                                Text("Version \(Self.appVersion)")
+                                    .font(.subheadline)
+                                    .opacity(0.85)
+                            }
+                        }
+                    }
+                    .listRowInsets(EdgeInsets())
+                    .listRowBackground(Color.clear)
+                }
+
+                HouseholdSettingsSection()
+
+                ClaudeSettingsSection()
+
+                AddingSettingsSection()
+
+                ExpirySettingsSection()
+
+                RemindersSettingsSection()
+
+                Section("Inventory") {
+                    NavigationLink {
+                        LocationsSettingsView()
+                    } label: {
+                        Label("Storage Locations", systemImage: "square.grid.2x2")
+                    }
+                }
+
+                Section {
+                    Button {
+                        run("Sample data loaded.") { try $0.loadSampleData() }
+                    } label: {
+                        Label("Load Sample Data", systemImage: "tray.and.arrow.down")
+                    }
+                    Button(role: .destructive) {
+                        isConfirmingDelete = true
+                    } label: {
+                        Label("Delete All Data", systemImage: "trash")
+                    }
+                } header: {
+                    Text("Data")
+                } footer: {
+                    if let statusMessage {
+                        Text(statusMessage)
+                    }
+                }
+
+                Section("About") {
+                    LabeledContent("Version", value: Self.appVersion)
+                    LabeledContent("Core", value: InventoryCore.version)
+                    Link(destination: URL(string: "https://world.openfoodfacts.org")!) {
+                        Label("Product data: Open Food Facts (ODbL)", systemImage: "link")
+                    }
+                    .font(.footnote)
+                    Link(destination: URL(string: "https://www.foodsafety.gov/keep-food-safe/foodkeeper-app")!) {
+                        Label("Storage times: USDA FoodKeeper", systemImage: "link")
+                    }
+                    .font(.footnote)
+                }
+
+                Section {
+                    NavigationLink {
+                        PatchNotesView()
+                    } label: {
+                        Label("Patch Notes", systemImage: "list.bullet.rectangle")
+                    }
+                } footer: {
+                    Text("What changed in each update.")
+                }
+            }
+            .themedBackground()
+            .navigationTitle("Settings")
+            .confirmationDialog(
+                "Delete all products, items and history?",
+                isPresented: $isConfirmingDelete,
+                titleVisibility: .visible
+            ) {
+                Button("Delete All Data", role: .destructive) {
+                    run("All data deleted.") { try $0.deleteAllData() }
+                }
+            } message: {
+                Text("Storage locations are kept. This can't be undone.")
+            }
+            .errorAlert($errorMessage)
+        }
+    }
+
+    private func run(_ successMessage: String, _ work: (InventoryStore) throws -> Void) {
+        do {
+            try work(InventoryStore(context: modelContext))
+            statusMessage = successMessage
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
+
+    static var appVersion: String {
+        let info = Bundle.main.infoDictionary
+        let version = info?["CFBundleShortVersionString"] as? String ?? "?"
+        let build = info?["CFBundleVersion"] as? String ?? "?"
+        return "\(version) (\(build))"
+    }
+}
+
+#Preview {
+    SettingsView()
+        .modelContainer(PreviewSupport.container)
+        .environment(AppEnvironment.preview())
+}
