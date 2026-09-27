@@ -23,6 +23,7 @@ struct ReceiptScanFlow: View {
         case chooseSource
         case working(String)
         case review
+        case datePass([UUID])
         case failed(String)
     }
 
@@ -44,6 +45,8 @@ struct ReceiptScanFlow: View {
                     if let binding = Binding($review) {
                         ReceiptReviewView(review: binding, locations: locations, onImport: importReview)
                     }
+                case .datePass(let ids):
+                    DatePassView(itemIDs: ids) { dismiss() }
                 case .failed(let message):
                     ContentUnavailableView {
                         Label("Couldn't read the receipt", systemImage: "exclamationmark.triangle")
@@ -217,8 +220,14 @@ struct ReceiptScanFlow: View {
     private func importReview() {
         guard let review else { return }
         do {
-            try InventoryStore(context: modelContext).importReceipt(review)
-            dismiss()
+            let checkpoint = UndoCenter.checkpoint(modelContext)
+            let added = try InventoryStore(context: modelContext).importReceipt(review)
+            UndoCenter.shared.offer(added.count == 1 ? "Added 1 item" : "Added \(added.count) items", checkpoint: checkpoint)
+            if ExpiryPreferences.mode == .scanDates, added.contains(where: DatePassView.usuallyDated) {
+                stage = .datePass(added.map(\.id))
+            } else {
+                dismiss()
+            }
         } catch {
             errorMessage = error.localizedDescription
         }

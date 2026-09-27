@@ -11,10 +11,23 @@ final class InventoryItem {
     var initialQuantity: Double = 1
     var unitRaw: String = "each"
     var purchaseDate: Date = Date()
+    /// When to use it by: worked out from the fields below by
+    /// `InventoryStore.refreshExpiry`, and stored so reminders, filters and
+    /// the other phones in the home read one value.
     var expiryDate: Date?
-    /// True when the user set the expiry date; estimates never overwrite it.
+    /// A date set before package dates were tracked separately; kept as is.
     var expiryIsOverride: Bool = false
+    /// The date printed on the package.
+    var printedExpiryDate: Date?
     var openedDate: Date?
+    /// When it moved to its current kind of storage; nil means since purchase.
+    var climateSince: Date?
+    /// Share of its unopened shelf life used before `climateSince`.
+    var shelfLifeUsed: Double = 0
+    /// When it came out of the freezer.
+    var thawedDate: Date?
+    /// Added with "leave expiry blank": no estimate unless a date is entered.
+    var expiryTrackingOff: Bool = false
     /// When `quantity` was last known to be accurate (a quick action or a
     /// quantity edit). Forecasts project consumption from here; nil means
     /// the purchase date.
@@ -94,7 +107,7 @@ final class InventoryItem {
             unit: unit,
             locationID: location?.id,
             purchaseDate: purchaseDate,
-            expiryDate: expiryDate,
+            expiryDate: printedExpiryDate ?? (expiryIsOverride ? expiryDate : nil),
             notes: notes,
             barcode: product?.barcodes.first,
             packageSizeText: product?.packageSizeText,
@@ -105,6 +118,7 @@ final class InventoryItem {
             draft.tracksRunOut = product.tracksRunOut
             draft.tracksExpiry = product.tracksExpiry
         }
+        draft.openedDate = openedDate
         return draft
     }
 
@@ -115,6 +129,7 @@ final class InventoryItem {
         draft.quantity = initialQuantity
         draft.purchaseDate = now
         draft.expiryDate = nil
+        draft.openedDate = nil
         draft.notes = ""
         return draft
     }

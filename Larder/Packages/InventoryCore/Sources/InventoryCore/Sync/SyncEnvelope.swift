@@ -12,6 +12,8 @@ public enum SyncKind: String, Codable, CaseIterable, Sendable {
     case usage
     case shoppingItem
     case savedRecipe
+    /// Settings everyone in the home shares (how strictly to read dates).
+    case household
 
     /// Apply incoming records in this order so references resolve.
     public var applyOrder: Int { Self.allCases.firstIndex(of: self) ?? 0 }

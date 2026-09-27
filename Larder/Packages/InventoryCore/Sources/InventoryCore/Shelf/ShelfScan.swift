@@ -106,8 +106,19 @@ public struct ShelfScanHint: Sendable, Hashable, Identifiable {
     public var quantity: Double
     public var initialQuantity: Double
     public var unit: MeasureUnit
+    /// Where it's kept, when hints span several locations.
+    public var locationName: String?
 
-    public init(ref: String, itemID: UUID, name: String, brand: String?, quantity: Double, initialQuantity: Double, unit: MeasureUnit) {
+    public init(
+        ref: String,
+        itemID: UUID,
+        name: String,
+        brand: String?,
+        quantity: Double,
+        initialQuantity: Double,
+        unit: MeasureUnit,
+        locationName: String? = nil
+    ) {
         self.ref = ref
         self.itemID = itemID
         self.name = name
@@ -115,21 +126,26 @@ public struct ShelfScanHint: Sendable, Hashable, Identifiable {
         self.quantity = quantity
         self.initialQuantity = initialQuantity
         self.unit = unit
+        self.locationName = locationName
     }
 }
 
 public struct ShelfScanInput: Sendable, Equatable {
-    /// A JPEG, already downscaled to what the model can use.
-    public var image: Data
+    /// JPEGs of the same place, already downscaled to what the model can use.
+    public var images: [Data]
     public var locationName: String?
     public var climate: StorageClimate?
     public var hints: [ShelfScanHint]
 
-    public init(image: Data, locationName: String? = nil, climate: StorageClimate? = nil, hints: [ShelfScanHint] = []) {
-        self.image = image
+    public init(images: [Data], locationName: String? = nil, climate: StorageClimate? = nil, hints: [ShelfScanHint] = []) {
+        self.images = images.filter { !$0.isEmpty }
         self.locationName = locationName
         self.climate = climate
         self.hints = hints
+    }
+
+    public init(image: Data, locationName: String? = nil, climate: StorageClimate? = nil, hints: [ShelfScanHint] = []) {
+        self.init(images: [image], locationName: locationName, climate: climate, hints: hints)
     }
 }
 
@@ -220,9 +236,12 @@ public enum ShelfScanPrompt {
     the photo are fine to leave out; the list never limits what you report.
     """
 
-    /// The text that follows the image.
+    /// The text that follows the images.
     public static func userText(for input: ShelfScanInput) -> String {
         var sections: [String] = []
+        if input.images.count > 1 {
+            sections.append("These \(input.images.count) photos show the same storage place: different shelves or angles. Count each product once, even if it shows up in more than one photo.")
+        }
         if let name = input.locationName {
             var place = "Picked location: \(name)"
             if let climate = input.climate { place += " (\(climate.rawValue) temperature)" }

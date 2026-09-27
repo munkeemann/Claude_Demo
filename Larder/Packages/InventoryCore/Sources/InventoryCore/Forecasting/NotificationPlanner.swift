@@ -71,7 +71,8 @@ public struct PlannedNotification: Sendable, Equatable {
     public var title: String
     public var body: String
     public var kind: Kind = .headsUp
-    /// Items a toss reminder covers.
+    /// Items the reminder covers: what to toss, or what expires soon (for
+    /// "Freeze it" and recipe suggestions).
     public var itemIDs: [UUID] = []
     /// App badge to show: items expired by the time this fires.
     public var badge: Int?
@@ -120,7 +121,8 @@ public enum NotificationPlanner {
                 id: identifierPrefix + dayStamp(fireDate, calendar: calendar),
                 fireDate: fireDate,
                 title: title(for: group),
-                body: body(for: group, on: fireDate, calendar: calendar)
+                body: body(for: group, on: fireDate, calendar: calendar),
+                itemIDs: group.filter { $0.kind == .expires }.compactMap(\.itemID)
             )
         }
         let toss = settings.tossRemindersEnabled ? tossReminders(events: events, settings: settings, now: now, calendar: calendar) : []

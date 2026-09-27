@@ -25,6 +25,10 @@ public struct ShelfScanLine: Identifiable, Sendable, Hashable {
     public var matchedItemID: UUID?
     /// The matched item's recorded amount before the scan.
     public var previousQuantity: Double?
+    /// Where a new item goes, when not the review's location.
+    public var locationID: UUID?
+    public var barcode: String?
+    public var imageURL: URL?
 
     public init(
         id: UUID = UUID(),
@@ -39,7 +43,10 @@ public struct ShelfScanLine: Identifiable, Sendable, Hashable {
         shelfLifeDays: Int? = nil,
         confidence: ExtractionConfidence = .high,
         matchedItemID: UUID? = nil,
-        previousQuantity: Double? = nil
+        previousQuantity: Double? = nil,
+        locationID: UUID? = nil,
+        barcode: String? = nil,
+        imageURL: URL? = nil
     ) {
         self.id = id
         self.include = include
@@ -54,6 +61,9 @@ public struct ShelfScanLine: Identifiable, Sendable, Hashable {
         self.confidence = confidence
         self.matchedItemID = matchedItemID
         self.previousQuantity = previousQuantity
+        self.locationID = locationID
+        self.barcode = barcode
+        self.imageURL = imageURL
     }
 
     public var action: Action { matchedItemID == nil ? .add : .update }
@@ -83,9 +93,11 @@ public struct ShelfScanLine: Identifiable, Sendable, Hashable {
             category: category,
             quantity: quantity,
             unit: unit,
-            locationID: locationID,
+            locationID: self.locationID ?? locationID,
             purchaseDate: date,
-            packageSizeText: packageSize
+            barcode: barcode,
+            packageSizeText: packageSize,
+            imageURL: imageURL
         )
         if let shelfLifeDays, category.defaultTracksExpiry {
             draft.expiryDate = calendar.date(byAdding: .day, value: shelfLifeDays, to: date)
@@ -112,6 +124,17 @@ public struct ShelfScanReview: Sendable, Equatable {
     /// Log added items, and increases on tracked ones, as purchases made
     /// today, so they count toward usage estimates. Off for stock-taking.
     public var justBought: Bool = false
+    /// What added the items: a shelf photo, a typed list, barcodes.
+    public var source: PurchaseSource = .shelfScan
+
+    /// A review of new items only (a typed list or scanned barcodes).
+    public init(lines: [ShelfScanLine], locationID: UUID?, source: PurchaseSource, justBought: Bool) {
+        self.lines = lines
+        self.unseen = []
+        self.locationID = locationID
+        self.source = source
+        self.justBought = justBought
+    }
 
     /// Matches each detected product to a tracked item: first by the
     /// reference Claude gave (if it's real and unused), then by name when

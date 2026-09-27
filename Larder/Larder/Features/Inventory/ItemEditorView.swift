@@ -20,6 +20,8 @@ struct ItemEditorView: View {
     @State private var draft: ItemDraft
     @State private var hasExpiry: Bool
     @State private var price: Double?
+    @State private var isScanningDate = false
+    @State private var askOpenedFor: UUID?
     @State private var errorMessage: String?
 
     init(mode: Mode, onFinish: (() -> Void)? = nil) {
@@ -88,16 +90,37 @@ struct ItemEditorView: View {
                     }
                 }
                 DatePicker("Purchased", selection: $draft.purchaseDate, displayedComponents: .date)
-                Toggle("Expiry date", isOn: $hasExpiry.animation())
+            }
+
+            Section {
+                Toggle("Date on the package", isOn: $hasExpiry.animation())
                 if hasExpiry {
                     DatePicker(
-                        "Expires",
+                        "Package date",
                         selection: Binding(
                             get: { draft.expiryDate ?? defaultExpiry },
                             set: { draft.expiryDate = $0 }
                         ),
                         displayedComponents: .date
                     )
+                }
+                Button {
+                    isScanningDate = true
+                } label: {
+                    Label(hasExpiry ? "Scan the Date Again" : "Scan the Date", systemImage: "camera.viewfinder")
+                }
+                Toggle("Opened", isOn: Binding(
+                    get: { draft.openedDate != nil },
+                    set: { draft.openedDate = $0 ? (draft.openedDate ?? Date()) : nil }
+                ).animation())
+                if let opened = draft.openedDate {
+                    DatePicker("Opened on", selection: Binding(get: { opened }, set: { draft.openedDate = $0 }), displayedComponents: .date)
+                }
+            } header: {
+                Text("Expiry")
+            } footer: {
+                if let estimate = estimatePreview {
+                    Text(estimate)
                 }
             }
 
@@ -156,6 +179,42 @@ struct ItemEditorView: View {
         }
         .onChange(of: hasExpiry) { _, isOn in
             draft.expiryDate = isOn ? (draft.expiryDate ?? defaultExpiry) : nil
+            if isOn { draft.expiryIsEstimate = false }
+        }
+        .onChange(of: draft.locationID) { oldValue, newValue in
+            // Sealed food going from the pantry into the fridge was usually just opened.
+            guard !isAdding, draft.openedDate == nil, draft.category.isFood,
+                  climate(of: oldValue) == .room, climate(of: newValue) == .fridge
+            else { return }
+            askOpenedFor = newValue
+        }
+        .confirmationDialog(
+            "Did you open it?",
+            isPresented: Binding(get: { askOpenedFor != nil }, set: { if !$0 { askOpenedFor = nil } }),
+            titleVisibility: .visible
+        ) {
+            Button("Yes, it's open") {
+                draft.openedDate = Date()
+                askOpenedFor = nil
+            }
+            Button("No, still sealed") { askOpenedFor = nil }
+        } message: {
+            Text("Opened food keeps for less time, so Larder moves its date up.")
+        }
+        .sheet(isPresented: $isScanningDate) {
+            NavigationStack {
+                DateCaptureView(title: "Package Date", initial: draft.expiryDate) { date in
+                    draft.expiryDate = date
+                    draft.expiryIsEstimate = false
+                    hasExpiry = true
+                    isScanningDate = false
+                }
+                .toolbar {
+                    ToolbarItem(placement: .cancellationAction) {
+                        Button("Cancel") { isScanningDate = false }
+                    }
+                }
+            }
         }
         .onAppear {
             if isAdding && draft.locationID == nil {
@@ -167,6 +226,28 @@ struct ItemEditorView: View {
 
     private var defaultExpiry: Date {
         Calendar.current.date(byAdding: .day, value: 7, to: draft.purchaseDate) ?? draft.purchaseDate
+    }
+
+    private func climate(of locationID: UUID?) -> StorageClimate? {
+        locations.first { $0.id == locationID }?.climate
+    }
+
+    /// What Larder will use without a package date.
+    private var estimatePreview: String? {
+        guard !hasExpiry, draft.tracksExpiry, !draft.trimmedName.isEmpty else { return nil }
+        let place = climate(of: draft.locationID) ?? draft.category.defaultClimate
+        let inputs = ExpiryInputs(
+            category: draft.category,
+            foodKeeper: FoodKeeper.match(name: draft.trimmedName, brand: draft.trimmedBrand, category: draft.category),
+            climate: place,
+            purchaseDate: draft.purchaseDate,
+            openedDate: draft.openedDate
+        )
+        let result = ExpiryCalculator.compute(inputs, strictness: InventoryStore(context: modelContext).expiryStrictness())
+        guard let date = result.date else { return nil }
+        var text = "Without a package date, Larder estimates \(date.formatted(date: .abbreviated, time: .omitted))"
+        if let explanation = result.explanation { text += " (\(explanation))" }
+        return text + "."
     }
 
     private func defaultLocationID(for category: ProductCategory) -> UUID? {

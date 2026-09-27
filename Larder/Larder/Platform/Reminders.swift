@@ -33,6 +33,16 @@ enum Reminders {
     }
 }
 
+extension Reminders {
+    /// The "Freeze It" notification action: moves the items to the freezer,
+    /// which resets their dates, then replans.
+    static func freeze(_ ids: [UUID], container: ModelContainer) async {
+        let context = container.mainContext
+        _ = try? InventoryStore(context: context).freeze(ids)
+        await refresh(context: context)
+    }
+}
+
 /// Periodic background refresh so reminders stay current even if the app
 /// isn't opened. The identifier is listed in Info.plist.
 enum BackgroundRefresh {

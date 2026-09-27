@@ -263,11 +263,13 @@ struct CookedSheet: View {
 
     private func log() {
         let selected = uses.filter { $0.include && $0.amount > 0 }
+        let checkpoint = UndoCenter.checkpoint(modelContext)
         do {
             try InventoryStore(context: modelContext).markCooked(
                 evaluated.recipe,
                 uses: selected.map { (item: $0.item, amount: $0.amount) }
             )
+            UndoCenter.shared.offer(selected.count == 1 ? "Used 1 ingredient" : "Used \(selected.count) ingredients", checkpoint: checkpoint)
             onLogged(selected.count)
             dismiss()
         } catch {

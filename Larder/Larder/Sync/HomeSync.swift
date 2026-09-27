@@ -452,6 +452,13 @@ final class HomeSync {
             if let state = recordState(name) { context.delete(state) }
         }
         try? context.save()
+
+        // Someone changed how strictly the home reads dates: every item's
+        // date moves with it.
+        if incoming.contains(where: { $0.2.kind == .household }) {
+            try? InventoryStore(context: context).refreshAllExpiries()
+            Task { await Reminders.refresh(context: context) }
+        }
     }
 
     /// Re-applies records whose references arrived after them.

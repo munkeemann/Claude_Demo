@@ -35,6 +35,10 @@ enum NotificationScheduler {
     /// Toss reminders carry a "Tossed them" button.
     static let tossCategory = "larder.toss"
     static let tossedAction = "larder.toss.done"
+    /// "Use it soon" reminders offer freezing or a recipe.
+    static let expiringCategory = "larder.expiring"
+    static let freezeAction = "larder.expiring.freeze"
+    static let recipeAction = "larder.expiring.recipe"
     /// `userInfo` key holding the covered item IDs as strings.
     static let itemIDsKey = "itemIDs"
     /// `userInfo` key naming the tab a tap should open.
@@ -48,7 +52,10 @@ enum NotificationScheduler {
     static func registerCategories() {
         let tossed = UNNotificationAction(identifier: tossedAction, title: "Tossed them", options: [])
         let toss = UNNotificationCategory(identifier: tossCategory, actions: [tossed], intentIdentifiers: [], options: [])
-        UNUserNotificationCenter.current().setNotificationCategories([toss])
+        let freeze = UNNotificationAction(identifier: freezeAction, title: "Freeze It", options: [])
+        let recipe = UNNotificationAction(identifier: recipeAction, title: "Find a Recipe", options: [.foreground])
+        let expiring = UNNotificationCategory(identifier: expiringCategory, actions: [freeze, recipe], intentIdentifiers: [], options: [])
+        UNUserNotificationCenter.current().setNotificationCategories([toss, expiring])
     }
 
     static func reschedule(_ plan: [PlannedNotification]) async {
@@ -71,6 +78,9 @@ enum NotificationScheduler {
                 content.categoryIdentifier = tossCategory
                 content.userInfo[itemIDsKey] = notification.itemIDs.map(\.uuidString)
                 content.threadIdentifier = "toss"
+            } else if !notification.itemIDs.isEmpty {
+                content.categoryIdentifier = expiringCategory
+                content.userInfo[itemIDsKey] = notification.itemIDs.map(\.uuidString)
             }
             if let badge = notification.badge {
                 content.badge = NSNumber(value: badge)

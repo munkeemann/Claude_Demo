@@ -6,6 +6,8 @@ public enum QuickAction: Sendable, Equatable {
     case usedSome(Double)
     case usedUp
     case tossed
+    /// Threw out part of it. The amount is in the item's unit.
+    case tossedSome(Double)
 }
 
 /// The mutable state of an item that quick actions operate on.
@@ -56,6 +58,18 @@ public enum QuickActionCalculator {
             return QuickActionResult(quantity: 0, status: .usedUp, usageType: .usedUp, usageQuantity: remaining)
         case .tossed:
             return QuickActionResult(quantity: 0, status: .discarded, usageType: .discarded, usageQuantity: remaining)
+        case .tossedSome(let requested):
+            let tossed = min(max(0, requested), remaining)
+            let left = remaining - tossed
+            if left <= epsilon {
+                return QuickActionResult(quantity: 0, status: .discarded, usageType: .discarded, usageQuantity: rounded(tossed))
+            }
+            return QuickActionResult(
+                quantity: rounded(left),
+                status: status(forQuantity: left, initialQuantity: state.initialQuantity),
+                usageType: .discarded,
+                usageQuantity: rounded(tossed)
+            )
         }
     }
 

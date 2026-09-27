@@ -71,6 +71,12 @@ struct SoonView: View {
                                     Label("Tossed", systemImage: "xmark.bin")
                                 }
                                 .tint(Theme.terracotta)
+                                if item.location?.climate != .freezer {
+                                    Button { perform { try store.freeze(item) } } label: {
+                                        Label("Freeze", systemImage: "snowflake")
+                                    }
+                                    .tint(.blue)
+                                }
                             }
                         }
                     }
@@ -97,6 +103,18 @@ struct SoonView: View {
                                 addToList(entry)
                             }
                         }
+                    }
+                }
+
+                if let report = try? store.wasteReport(), report.months.contains(where: { $0.tossedCount + $0.usedUpCount > 0 }) {
+                    Section {
+                        NavigationLink {
+                            WasteView(report: report)
+                        } label: {
+                            WasteSummaryRow(month: report.thisMonth)
+                        }
+                    } header: {
+                        Text("Food waste")
                     }
                 }
             }

@@ -20,10 +20,13 @@ public struct ItemDraft: Sendable, Hashable {
     public var tracksRunOut: Bool
     public var tracksExpiry: Bool
     /// True when `expiryDate` is an estimate (receipt shelf life, shelf-life
-    /// table) rather than a date the user entered.
+    /// table) rather than a date the user entered. An entered date is the
+    /// one printed on the package.
     public var expiryIsEstimate: Bool = false
     /// Shelf life suggested for this product at the chosen location, in days.
     public var estimatedShelfLifeDays: Int?
+    /// When the package was opened, if it has been.
+    public var openedDate: Date?
 
     public init(
         name: String = "",

@@ -17,6 +17,11 @@ on:
       - "!Larder/**/*.md"
       - ".github/workflows/larder-ios.yml"
   workflow_dispatch:
+    inputs:
+      upload:
+        description: "Upload to TestFlight after the tests pass"
+        type: boolean
+        default: true
 
 # Pushes queue instead of cancelling each other, so an upload is never cut
 # off halfway; if several pushes land during a run, only the newest waits.
@@ -110,8 +115,10 @@ jobs:
   testflight:
     name: Upload to TestFlight
     needs: [core-linux, app-macos]
+    # A manual run with "upload" off only builds and tests.
     if: >-
       github.event_name != 'pull_request' &&
+      (github.event_name != 'workflow_dispatch' || inputs.upload) &&
       (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/heads/claude/'))
     # App Store Connect only accepts builds made with the iOS 26 SDK or later.
     runs-on: macos-26

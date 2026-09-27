@@ -10,10 +10,9 @@ struct InventoryHomeView: View {
 
     @State private var filter = InventoryFilter()
     @State private var editor: EditorSheet?
-    @State private var isScanning = false
-    @State private var isScanningReceipt = false
-    @State private var isScanningShelf = false
+    @State private var flow: Flow?
     @State private var isShowingFilters = false
+    @AppStorage(AddPreferences.defaultMethodKey) private var defaultMethodRaw = AddMethod.default.rawValue
     @State private var useSomeItem: InventoryItem?
     @State private var recountItem: InventoryItem?
     @State private var errorMessage: String?
@@ -41,14 +40,16 @@ struct InventoryHomeView: View {
                 ItemEditorView(mode: sheet.mode)
             }
         }
-        .sheet(isPresented: $isScanning) {
-            ScanBarcodeFlow()
-        }
-        .sheet(isPresented: $isScanningReceipt) {
-            ReceiptScanFlow()
-        }
-        .sheet(isPresented: $isScanningShelf) {
-            ShelfScanFlow()
+        .sheet(item: $flow) { flow in
+            switch flow {
+            case .quickAdd: QuickAddView()
+            case .shelf: ShelfScanFlow()
+            case .barcodes: ScanBarcodeFlow()
+            case .receipt: ReceiptScanFlow()
+            case .tossOut: ScanOutFlow(initialDisposition: .tossed)
+            case .useUp: ScanOutFlow(initialDisposition: .used)
+            case .recipe: RecipeScanFlow()
+            }
         }
         .sheet(item: $useSomeItem) { item in
             UseSomeSheet(item: item)
@@ -76,11 +77,12 @@ struct InventoryHomeView: View {
             } description: {
                 Text("Photograph a shelf, scan a receipt or barcode, or add items by hand. You can also load sample data to explore.")
             } actions: {
-                Button("Add Item") { editor = .add(ItemDraft()) }
+                Button("Quick Add") { flow = .quickAdd }
                     .buttonStyle(.borderedProminent)
-                Button("Scan a Shelf") { isScanningShelf = true }
-                Button("Scan Receipt") { isScanningReceipt = true }
-                Button("Scan Barcode") { isScanning = true }
+                Button("Scan a Shelf") { flow = .shelf }
+                Button("Scan Receipt") { flow = .receipt }
+                Button("Scan Barcodes") { flow = .barcodes }
+                Button("Add One Item") { editor = .add(ItemDraft()) }
                 Button("Load Sample Data") { perform { try store.loadSampleData() } }
             }
         } else if sections.isEmpty {
@@ -146,6 +148,9 @@ struct InventoryHomeView: View {
         Button { recountItem = item } label: { Label("How Much Is Left?", systemImage: "gauge.with.dots.needle.50percent") }
         Button { apply(.usedUp, to: item) } label: { Label("Used Up", systemImage: "checkmark.circle") }
         Button { apply(.tossed, to: item) } label: { Label("Tossed", systemImage: "xmark.bin") }
+        if item.location?.climate != .freezer {
+            Button { perform { try store.freeze(item) } } label: { Label("Freeze It", systemImage: "snowflake") }
+        }
         Divider()
         Button { editor = .edit(item) } label: { Label("Edit", systemImage: "pencil") }
         Button { editor = .add(item.restockDraft()) } label: { Label("Buy Again", systemImage: "arrow.clockwise") }
@@ -191,12 +196,25 @@ struct InventoryHomeView: View {
         }
         ToolbarItem(placement: .primaryAction) {
             Menu {
-                Button { isScanningShelf = true } label: { Label("Scan a Shelf", systemImage: "camera.viewfinder") }
-                Button { isScanningReceipt = true } label: { Label("Scan Receipt", systemImage: "doc.text.viewfinder") }
-                Button { isScanning = true } label: { Label("Scan Barcode", systemImage: "barcode.viewfinder") }
-                Button { editor = .add(ItemDraft()) } label: { Label("Add Manually", systemImage: "square.and.pencil") }
+                Button { flow = .tossOut } label: { Label("Toss Things Out", systemImage: "xmark.bin") }
+                Button { flow = .useUp } label: { Label("Used Things Up", systemImage: "checkmark.circle") }
+                Button { flow = .recipe } label: { Label("I Cooked a Recipe", systemImage: "frying.pan") }
+            } label: {
+                Label("Remove", systemImage: "minus.circle")
+            }
+        }
+        ToolbarItem(placement: .primaryAction) {
+            // Tap for your usual way of adding; hold for all of them.
+            Menu {
+                ForEach(AddMethod.allCases) { method in
+                    Button { start(method) } label: {
+                        Label(method.label, systemImage: method.systemImage)
+                    }
+                }
             } label: {
                 Label("Add", systemImage: "plus")
+            } primaryAction: {
+                start(AddMethod(rawValue: defaultMethodRaw) ?? .default)
             }
         }
     }
@@ -225,6 +243,22 @@ struct InventoryHomeView: View {
     }
 
     // MARK: - Actions
+
+    /// The flows presented as sheets from this screen.
+    enum Flow: String, Identifiable {
+        case quickAdd, shelf, barcodes, receipt, tossOut, useUp, recipe
+        var id: String { rawValue }
+    }
+
+    private func start(_ method: AddMethod) {
+        switch method {
+        case .quickAdd: flow = .quickAdd
+        case .shelf: flow = .shelf
+        case .barcodes: flow = .barcodes
+        case .receipt: flow = .receipt
+        case .manual: editor = .add(ItemDraft())
+        }
+    }
 
     private func apply(_ action: QuickAction, to item: InventoryItem) {
         perform { try store.apply(action, to: item) }

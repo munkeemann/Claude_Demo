@@ -20,10 +20,13 @@ struct ReceiptReviewView: View {
 
             Section {
                 ForEach($review.lines) { $line in
-                    NavigationLink {
-                        ReceiptLineEditor(line: $line, locations: locations)
-                    } label: {
-                        ReceiptLineRow(line: line, locationName: locationName(for: line), currencyCode: review.currencyCode)
+                    HStack(spacing: 8) {
+                        IncludeToggle(isOn: $line.include)
+                        NavigationLink {
+                            ReceiptLineEditor(line: $line, locations: locations)
+                        } label: {
+                            ReceiptLineRow(line: line, locationName: locationName(for: line), currencyCode: review.currencyCode)
+                        }
                     }
                     .swipeActions(edge: .trailing) {
                         Button {
@@ -75,7 +78,7 @@ struct ReceiptReviewView: View {
                 )
                 .foregroundStyle(Theme.honeyInk)
             }
-            Text("Swipe to skip items. Tap to edit; your edits are remembered for next time.")
+            Text("Tap the circle to skip an item. Tap the item to edit it; your edits are remembered for next time.")
         }
     }
 
@@ -91,9 +94,6 @@ private struct ReceiptLineRow: View {
 
     var body: some View {
         HStack(spacing: 12) {
-            Image(systemName: line.include ? "checkmark.circle.fill" : "circle")
-                .foregroundStyle(line.include ? Color.accentColor : Color.secondary)
-                .font(.title3)
             VStack(alignment: .leading, spacing: 2) {
                 HStack(spacing: 6) {
                     Text(line.name.isEmpty ? "Unnamed" : line.name)

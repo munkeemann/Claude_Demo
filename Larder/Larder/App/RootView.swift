@@ -37,6 +37,10 @@ struct RootView: View {
         }
         .tint(Theme.green)
         .fontDesign(.rounded)
+        .overlay(alignment: .bottom) {
+            UndoBanner()
+                .padding(.bottom, 64)
+        }
         .sheet(isPresented: Binding(
             get: { homeSync.pendingInvitation != nil },
             set: { if !$0 { homeSync.pendingInvitation = nil } }

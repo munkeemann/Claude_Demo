@@ -65,8 +65,11 @@ struct ReceiptImportTests {
         let milk = try #require(items.first { $0.product?.name == "Whole Milk" })
         #expect(milk.location?.kind == .fridge)
         #expect(milk.unit == .gallon)
-        #expect(milk.expiryDate == Calendar.current.date(byAdding: .day, value: 7, to: Self.now))
+        // USDA only says "the package date" for milk, so the receipt's 7 days
+        // is the estimate; dairy stays at or under it (6 when Balanced).
+        #expect(milk.expiryDate == Calendar.current.date(byAdding: .day, value: 6, to: Self.now))
         #expect(milk.expiryIsOverride == false, "Receipt expiry is an estimate")
+        #expect(milk.printedExpiryDate == nil)
         #expect(milk.product?.shelfLifeFridgeDays == 7)
 
         let bananas = try #require(items.first { $0.product?.name == "Bananas" })

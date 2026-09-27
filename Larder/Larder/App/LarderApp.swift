@@ -15,7 +15,7 @@ struct LarderApp: App {
         do {
             let store = InventoryStore(context: container.mainContext)
             try store.seedLocationsIfNeeded()
-            try store.refreshEstimatedExpiries()
+            try store.refreshAllExpiries()
         } catch {
             assertionFailure("Launch maintenance failed: \(error)")
         }

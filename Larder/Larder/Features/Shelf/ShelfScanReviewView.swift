@@ -1,8 +1,10 @@
 import InventoryCore
+import SwiftData
 import SwiftUI
 
-/// Confirm what Claude saw on the shelf: new items to add, new counts for
-/// tracked ones, and tracked items that weren't in the photo.
+/// Confirm a batch of items before anything changes: new items to add, new
+/// counts for tracked ones, and tracked items that weren't in the photo.
+/// Shelf photos, Quick Add lists and barcode batches all end here.
 struct ShelfScanReviewView: View {
     /// Offers to scan again against a location that fits the photo better.
     struct LocationSuggestion {
@@ -13,9 +15,13 @@ struct ShelfScanReviewView: View {
     }
 
     @Binding var review: ShelfScanReview
-    let photo: UIImage?
+    var photos: [UIImage] = []
     var suggestion: LocationSuggestion? = nil
+    /// What found the items, for the summary line ("Claude found 12 products").
+    var finder: String = "Claude"
     var onImport: () -> Void
+
+    @Query(sort: \StorageLocation.sortOrder) private var locations: [StorageLocation]
 
     private var changeCount: Int {
         review.includedLines.count + review.unseen.filter(\.markFinished).count
@@ -23,9 +29,9 @@ struct ShelfScanReviewView: View {
 
     private var foundSummary: String {
         switch review.lines.count {
-        case 0: "Claude didn't find any products in the photo."
-        case 1: "Claude found 1 product. Tap it to fix it, or swipe to skip it."
-        case let count: "Claude found \(count) products. Tap one to fix it, or swipe to skip it."
+        case 0: "\(finder) didn't find any products."
+        case 1: "\(finder) found 1 product. Tap the circle to skip it, or the item to fix it."
+        case let count: "\(finder) found \(count) products. Tap a circle to skip one, or an item to fix it."
         }
     }
 
@@ -34,18 +40,24 @@ struct ShelfScanReviewView: View {
 
     var body: some View {
         List {
-            if let photo {
-                Section {
-                    Image(uiImage: photo)
-                        .resizable()
-                        .scaledToFit()
-                        .frame(maxWidth: .infinity, maxHeight: 200)
-                        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
-                        .listRowInsets(EdgeInsets())
-                        .listRowBackground(Color.clear)
-                } footer: {
-                    Text(foundSummary)
+            Section {
+                if !photos.isEmpty {
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        HStack(spacing: 8) {
+                            ForEach(Array(photos.enumerated()), id: \.offset) { _, photo in
+                                Image(uiImage: photo)
+                                    .resizable()
+                                    .scaledToFill()
+                                    .frame(width: photos.count == 1 ? 280 : 150, height: 180)
+                                    .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+                            }
+                        }
+                    }
+                    .listRowInsets(EdgeInsets())
+                    .listRowBackground(Color.clear)
                 }
+            } footer: {
+                Text(foundSummary)
             }
 
             if let suggestion {
@@ -134,10 +146,13 @@ struct ShelfScanReviewView: View {
     }
 
     private func row(_ line: Binding<ShelfScanLine>) -> some View {
-        NavigationLink {
-            ShelfLineEditor(line: line)
-        } label: {
-            ShelfLineRow(line: line.wrappedValue)
+        HStack(spacing: 8) {
+            IncludeToggle(isOn: line.include)
+            NavigationLink {
+                ShelfLineEditor(line: line, locations: locations, defaultLocationID: review.locationID)
+            } label: {
+                ShelfLineRow(line: line.wrappedValue, locationName: locationName(for: line.wrappedValue))
+            }
         }
         .swipeActions(edge: .trailing) {
             Button {
@@ -148,16 +163,20 @@ struct ShelfScanReviewView: View {
             .tint(line.wrappedValue.include ? .gray : Theme.green)
         }
     }
+
+    /// Shown when items in one review go to different places.
+    private func locationName(for line: ShelfScanLine) -> String? {
+        guard line.action == .add, let id = line.locationID, id != review.locationID else { return nil }
+        return locations.first { $0.id == id }?.name
+    }
 }
 
 private struct ShelfLineRow: View {
     let line: ShelfScanLine
+    let locationName: String?
 
     var body: some View {
         HStack(spacing: 12) {
-            Image(systemName: line.include ? "checkmark.circle.fill" : "circle")
-                .foregroundStyle(line.include ? Theme.green : Color.secondary)
-                .font(.title3)
             CategoryIcon(category: line.category, size: 30)
             VStack(alignment: .leading, spacing: 2) {
                 HStack(spacing: 6) {
@@ -190,6 +209,8 @@ private struct ShelfLineRow: View {
             if let full = line.fullQuantity { parts[0] += " of \(line.unit.label(for: full))" }
             if let size = line.packageSize { parts.append(size) }
             if !line.brand.isEmpty { parts.append(line.brand) }
+            if let locationName { parts.append(locationName) }
+            if line.name.isEmpty, let barcode = line.barcode { parts.append("Barcode \(barcode)") }
             return parts.joined(separator: " · ")
         }
     }
@@ -199,6 +220,8 @@ private struct ShelfLineRow: View {
 /// only the count changes.
 private struct ShelfLineEditor: View {
     @Binding var line: ShelfScanLine
+    let locations: [StorageLocation]
+    let defaultLocationID: UUID?
 
     var body: some View {
         Form {
@@ -214,6 +237,14 @@ private struct ShelfLineEditor: View {
                     Picker("Category", selection: $line.category) {
                         ForEach(ProductCategory.allCases) { category in
                             Label(category.displayName, systemImage: category.systemImage).tag(category)
+                        }
+                    }
+                    Picker("Location", selection: Binding(
+                        get: { line.locationID ?? defaultLocationID },
+                        set: { line.locationID = $0 }
+                    )) {
+                        ForEach(locations) { location in
+                            Label(location.name, systemImage: location.systemImage).tag(Optional(location.id))
                         }
                     }
                 }
@@ -260,8 +291,8 @@ private struct ShelfLineEditor: View {
     NavigationStack {
         ShelfScanReviewView(
             review: .constant(ShelfScanReview(result: SampleShelfScan.result, hints: [], locationID: nil)),
-            photo: nil,
             onImport: {}
         )
     }
+    .modelContainer(PreviewSupport.container)
 }

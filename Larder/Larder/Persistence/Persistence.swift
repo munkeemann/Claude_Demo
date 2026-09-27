@@ -12,6 +12,7 @@ enum Persistence {
         Receipt.self,
         ShoppingListItem.self,
         SavedRecipe.self,
+        HouseholdSettings.self,
         SyncRecordState.self,
     ]
 

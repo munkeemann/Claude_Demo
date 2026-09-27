@@ -32,6 +32,10 @@ struct SettingsView: View {
 
                 ClaudeSettingsSection()
 
+                AddingSettingsSection()
+
+                ExpirySettingsSection()
+
                 RemindersSettingsSection()
 
                 Section("Inventory") {
@@ -68,6 +72,20 @@ struct SettingsView: View {
                         Label("Product data: Open Food Facts (ODbL)", systemImage: "link")
                     }
                     .font(.footnote)
+                    Link(destination: URL(string: "https://www.foodsafety.gov/keep-food-safe/foodkeeper-app")!) {
+                        Label("Storage times: USDA FoodKeeper", systemImage: "link")
+                    }
+                    .font(.footnote)
+                }
+
+                Section {
+                    NavigationLink {
+                        PatchNotesView()
+                    } label: {
+                        Label("Patch Notes", systemImage: "list.bullet.rectangle")
+                    }
+                } footer: {
+                    Text("What changed in each update.")
                 }
             }
             .themedBackground()

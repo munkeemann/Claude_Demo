@@ -57,6 +57,7 @@ struct SyncMapper {
         for object in try context.fetch(FetchDescriptor<UsageEvent>()) { add(Self.envelope(object)) }
         for object in try context.fetch(FetchDescriptor<ShoppingListItem>()) { add(Self.envelope(object)) }
         for object in try context.fetch(FetchDescriptor<SavedRecipe>()) { add(Self.envelope(object)) }
+        for object in try context.fetch(FetchDescriptor<HouseholdSettings>()) { add(Self.envelope(object)) }
         return result
     }
 
@@ -71,6 +72,7 @@ struct SyncMapper {
         case .usage: try usage(id).map { Self.envelope($0) }
         case .shoppingItem: try shoppingItem(id).map { Self.envelope($0) }
         case .savedRecipe: try savedRecipe(id).map { Self.envelope($0) }
+        case .household: try household(id).map { Self.envelope($0) }
         }
     }
 
@@ -101,6 +103,8 @@ struct SyncMapper {
         f.set("shelfLifeRoomDays", product.shelfLifeRoomDays)
         f.set("shelfLifeFridgeDays", product.shelfLifeFridgeDays)
         f.set("shelfLifeFreezerDays", product.shelfLifeFreezerDays)
+        f.set("foodKeeperID", product.foodKeeperID)
+        f.set("foodKeeperIsManual", product.foodKeeperIsManual)
         f.set("isIngredient", product.isIngredient)
         f.set("tracksRunOut", product.tracksRunOut)
         f.set("tracksExpiry", product.tracksExpiry)
@@ -137,7 +141,12 @@ struct SyncMapper {
         f.set("purchaseDate", item.purchaseDate)
         f.set("expiryDate", item.expiryDate)
         f.set("expiryIsOverride", item.expiryIsOverride)
+        f.set("printedExpiryDate", item.printedExpiryDate)
         f.set("openedDate", item.openedDate)
+        f.set("climateSince", item.climateSince)
+        f.set("shelfLifeUsed", item.shelfLifeUsed)
+        f.set("thawedDate", item.thawedDate)
+        f.set("expiryTrackingOff", item.expiryTrackingOff)
         f.set("quantityObservedAt", item.quantityObservedAt)
         f.set("status", item.statusRaw)
         f.set("notes", item.notes)
@@ -205,6 +214,13 @@ struct SyncMapper {
         return SyncEnvelope(kind: .savedRecipe, id: saved.id, fields: f.fields)
     }
 
+    static func envelope(_ settings: HouseholdSettings) -> SyncEnvelope {
+        var f = SyncFieldWriter()
+        f.set("expiryStrictness", settings.expiryStrictnessRaw)
+        f.set("updatedAt", settings.updatedAt)
+        return SyncEnvelope(kind: .household, id: settings.id, fields: f.fields)
+    }
+
     static func refs(_ pairs: [String: SyncRef?]) -> [String: SyncRef] {
         pairs.compactMapValues { $0 }
     }
@@ -250,6 +266,8 @@ struct SyncMapper {
             if r.has("shelfLifeRoomDays") { object.shelfLifeRoomDays = r.int("shelfLifeRoomDays") }
             if r.has("shelfLifeFridgeDays") { object.shelfLifeFridgeDays = r.int("shelfLifeFridgeDays") }
             if r.has("shelfLifeFreezerDays") { object.shelfLifeFreezerDays = r.int("shelfLifeFreezerDays") }
+            if r.has("foodKeeperID") { object.foodKeeperID = r.int("foodKeeperID") }
+            if let v = r.bool("foodKeeperIsManual") { object.foodKeeperIsManual = v }
             if let v = r.bool("isIngredient") { object.isIngredient = v }
             if let v = r.bool("tracksRunOut") { object.tracksRunOut = v }
             if let v = r.bool("tracksExpiry") { object.tracksExpiry = v }
@@ -283,7 +301,12 @@ struct SyncMapper {
             if let v = r.date("purchaseDate") { object.purchaseDate = v }
             if r.has("expiryDate") { object.expiryDate = r.date("expiryDate") }
             if let v = r.bool("expiryIsOverride") { object.expiryIsOverride = v }
+            if r.has("printedExpiryDate") { object.printedExpiryDate = r.date("printedExpiryDate") }
             if r.has("openedDate") { object.openedDate = r.date("openedDate") }
+            if r.has("climateSince") { object.climateSince = r.date("climateSince") }
+            if let v = r.double("shelfLifeUsed") { object.shelfLifeUsed = v }
+            if r.has("thawedDate") { object.thawedDate = r.date("thawedDate") }
+            if let v = r.bool("expiryTrackingOff") { object.expiryTrackingOff = v }
             if r.has("quantityObservedAt") { object.quantityObservedAt = r.date("quantityObservedAt") }
             if let v = r.string("status") { object.statusRaw = v }
             if let v = r.string("notes") { object.notes = v }
@@ -336,6 +359,11 @@ struct SyncMapper {
             if let v = r.date("createdAt") { object.createdAt = v }
             if r.has("lastCookedAt") { object.lastCookedAt = r.date("lastCookedAt") }
             if let v = r.int("timesCooked") { object.timesCooked = v }
+
+        case .household:
+            let object = try household(envelope.id) ?? insert(HouseholdSettings(), id: envelope.id)
+            if let v = r.int("expiryStrictness") { object.expiryStrictnessRaw = v }
+            if let v = r.date("updatedAt") { object.updatedAt = v }
         }
         return resolved
     }
@@ -353,6 +381,7 @@ struct SyncMapper {
         case .usage: object = try usage(id)
         case .shoppingItem: object = try shoppingItem(id)
         case .savedRecipe: object = try savedRecipe(id)
+        case .household: object = try household(id)
         }
         if let object { context.delete(object) }
     }
@@ -458,6 +487,12 @@ struct SyncMapper {
         descriptor.fetchLimit = 1
         return try context.fetch(descriptor).first
     }
+
+    func household(_ id: UUID) throws -> HouseholdSettings? {
+        var descriptor = FetchDescriptor<HouseholdSettings>(predicate: #Predicate<HouseholdSettings> { object in object.id == id })
+        descriptor.fetchLimit = 1
+        return try context.fetch(descriptor).first
+    }
 }
 
 /// Models whose ID the sync layer sets when it creates them from a record.
@@ -474,3 +509,4 @@ extension PurchaseEvent: SyncIdentifiable { func setSyncID(_ id: UUID) { self.id
 extension UsageEvent: SyncIdentifiable { func setSyncID(_ id: UUID) { self.id = id } }
 extension ShoppingListItem: SyncIdentifiable { func setSyncID(_ id: UUID) { self.id = id } }
 extension SavedRecipe: SyncIdentifiable { func setSyncID(_ id: UUID) { self.id = id } }
+extension HouseholdSettings: SyncIdentifiable { func setSyncID(_ id: UUID) { self.id = id } }

@@ -17,6 +17,7 @@ struct RecipesView: View {
     @State private var filters = RecipeFilters()
     @State private var phase: Phase = .idle
     @State private var work: Task<Void, Never>?
+    @State private var isScanningRecipe = false
 
     enum Phase {
         case idle
@@ -70,7 +71,31 @@ struct RecipesView: View {
             }
             .themedBackground()
             .navigationTitle("Recipes")
+            .toolbar {
+                ToolbarItem(placement: .primaryAction) {
+                    Button {
+                        isScanningRecipe = true
+                    } label: {
+                        Label("I Cooked a Recipe", systemImage: "camera")
+                    }
+                }
+            }
+            .sheet(isPresented: $isScanningRecipe) {
+                RecipeScanFlow()
+            }
+            .onAppear { focus(on: AppRouter.shared.recipeFocusItemIDs) }
+            .onChange(of: AppRouter.shared.recipeFocusItemIDs) { _, ids in focus(on: ids) }
         }
+    }
+
+    /// A "Find a recipe" reminder: suggest dishes that use those items.
+    private func focus(on ids: [UUID]?) {
+        guard let ids, !ids.isEmpty else { return }
+        AppRouter.shared.recipeFocusItemIDs = nil
+        let names = ids.compactMap { try? store.item(id: $0)?.displayName }
+        guard !names.isEmpty else { return }
+        filters.preferences = "Use up: \(names.joined(separator: ", "))"
+        suggest()
     }
 
     // MARK: - Sections

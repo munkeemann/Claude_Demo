@@ -130,13 +130,14 @@ struct InventoryStoreTests {
         #expect(try store.product(forBarcode: "0037000973417")?.id == manual.product?.id)
     }
 
-    @Test func explicitExpiryIsMarkedAsOverride() throws {
+    @Test func enteredExpiryIsThePackageDate() throws {
         let expiry = fixedNow.addingTimeInterval(5 * 86_400)
         let item = try store.addItem(
             from: ItemDraft(name: "Spinach", category: .produce, purchaseDate: fixedNow, expiryDate: expiry),
             source: .manual
         )
-        #expect(item.expiryIsOverride)
+        #expect(!item.expiryIsOverride)
+        #expect(item.printedExpiryDate == expiry)
         #expect(item.expiryDate == expiry)
     }
 

@@ -1,4 +1,5 @@
 import InventoryCore
+import SwiftData
 import SwiftUI
 
 struct ItemDetailView: View {
@@ -9,7 +10,11 @@ struct ItemDetailView: View {
     @State private var isUsingSome = false
     @State private var isRecounting = false
     @State private var addedToList = false
+    @State private var isCapturingDate = false
+    @State private var isPickingGuide = false
+    @State private var pendingMove: StorageLocation?
     @State private var errorMessage: String?
+    @Query(sort: \StorageLocation.sortOrder) private var locations: [StorageLocation]
 
     var body: some View {
         let forecast = item.product.flatMap { product in
@@ -39,13 +44,11 @@ struct ItemDetailView: View {
                 LabeledContent("Location", value: item.location?.name ?? "None")
                 LabeledContent("Category", value: item.product?.category.displayName ?? "Other")
                 LabeledContent("Purchased", value: item.purchaseDate.formatted(date: .abbreviated, time: .omitted))
-                if let expiry = item.expiryDate {
-                    LabeledContent("Expires") {
-                        HStack(spacing: 6) {
-                            Text(expiry.formatted(date: .abbreviated, time: .omitted))
-                            ExpiryBadge(date: expiry)
-                        }
-                    }
+                if let opened = item.openedDate {
+                    LabeledContent("Opened", value: opened.formatted(date: .abbreviated, time: .omitted))
+                }
+                if let thawed = item.thawedDate, item.location?.climate != .freezer {
+                    LabeledContent("Out of the freezer", value: thawed.formatted(date: .abbreviated, time: .omitted))
                 }
                 if let size = item.product?.packageSizeText {
                     LabeledContent("Package size", value: size)
@@ -55,6 +58,15 @@ struct ItemDetailView: View {
                         .foregroundStyle(.secondary)
                 }
             }
+
+            ExpirySection(
+                item: item,
+                result: item.expiryIsOverride ? nil : store.expiryResult(for: item),
+                onCaptureDate: { isCapturingDate = true },
+                onClearDate: { perform { try store.setPackageDate(item, nil) } },
+                onPickGuide: { isPickingGuide = true },
+                strictness: store.expiryStrictness()
+            )
 
             if let forecast {
                 UsageSection(
@@ -81,6 +93,33 @@ struct ItemDetailView: View {
                         Label("Tossed it", systemImage: "xmark.bin")
                     }
                     .tint(Theme.terracotta)
+                }
+
+                Section("Storage") {
+                    if item.location?.climate != .freezer {
+                        Button { perform { try store.freeze(item) } } label: {
+                            Label("Freeze it", systemImage: "snowflake")
+                        }
+                        if item.product?.foodKeeper?.freezingNotRecommended == true {
+                            Text("USDA doesn't recommend freezing this; it may lose quality.")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                    Menu {
+                        ForEach(locations.filter { $0.id != item.location?.id }) { location in
+                            Button { move(to: location) } label: {
+                                Label(location.name, systemImage: location.systemImage)
+                            }
+                        }
+                    } label: {
+                        Label("Move to…", systemImage: "arrow.right.circle")
+                    }
+                    Button {
+                        perform { try store.setOpened(item, item.openedDate == nil ? Date() : nil) }
+                    } label: {
+                        Label(item.openedDate == nil ? "Mark as opened" : "Mark as sealed", systemImage: item.openedDate == nil ? "seal" : "seal.fill")
+                    }
                 }
             }
 
@@ -119,6 +158,34 @@ struct ItemDetailView: View {
         .sheet(isPresented: $isRecounting) {
             RecountSheet(item: item, suggested: estimate.map(\.roundedRemaining))
         }
+        .sheet(isPresented: $isCapturingDate) {
+            NavigationStack {
+                DateCaptureView(title: "Package Date", initial: item.printedExpiryDate) { date in
+                    perform { try store.setPackageDate(item, date) }
+                    isCapturingDate = false
+                }
+                .toolbar {
+                    ToolbarItem(placement: .cancellationAction) {
+                        Button("Cancel") { isCapturingDate = false }
+                    }
+                }
+            }
+        }
+        .sheet(isPresented: $isPickingGuide) {
+            if let product = item.product {
+                FoodKeeperPicker(product: product)
+            }
+        }
+        .confirmationDialog(
+            "Did you open it?",
+            isPresented: Binding(get: { pendingMove != nil }, set: { if !$0 { pendingMove = nil } }),
+            titleVisibility: .visible
+        ) {
+            Button("Yes, it's open") { finishMove(opened: true) }
+            Button("No, still sealed") { finishMove(opened: false) }
+        } message: {
+            Text("Opened food keeps for less time, so Larder moves its date up.")
+        }
         .errorAlert($errorMessage)
     }
 
@@ -149,8 +216,26 @@ struct ItemDetailView: View {
         }
     }
 
+    private var store: InventoryStore { InventoryStore(context: modelContext) }
+
     private func apply(_ action: QuickAction) {
         perform { try InventoryStore(context: modelContext).apply(action, to: item) }
+    }
+
+    /// Moving sealed food from the pantry to the fridge usually means it was
+    /// just opened, so ask.
+    private func move(to location: StorageLocation) {
+        if store.shouldAskIfOpened(item, movingTo: location) {
+            pendingMove = location
+        } else {
+            perform { try store.moveItem(item, to: location) }
+        }
+    }
+
+    private func finishMove(opened: Bool) {
+        guard let location = pendingMove else { return }
+        pendingMove = nil
+        perform { try store.moveItem(item, to: location, opened: opened) }
     }
 
     private func perform(_ work: () throws -> Void) {

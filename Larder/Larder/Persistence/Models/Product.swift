@@ -21,6 +21,10 @@ final class Product {
     var shelfLifeRoomDays: Int?
     var shelfLifeFridgeDays: Int?
     var shelfLifeFreezerDays: Int?
+    /// The USDA FoodKeeper entry for it: nil until matched, 0 when nothing fits.
+    var foodKeeperID: Int?
+    /// The person picked the entry; renaming doesn't re-match it.
+    var foodKeeperIsManual: Bool = false
     var isIngredient: Bool = false
     var tracksRunOut: Bool = true
     var tracksExpiry: Bool = false
@@ -81,6 +85,10 @@ final class Product {
         case .fridge: shelfLifeFridgeDays
         case .freezer: shelfLifeFreezerDays
         }
+    }
+
+    var foodKeeper: FoodKeeperEntry? {
+        foodKeeperID.flatMap { $0 > 0 ? FoodKeeper.entry(id: $0) : nil }
     }
 
     var barcodes: [String] {

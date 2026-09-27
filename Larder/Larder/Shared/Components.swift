@@ -113,6 +113,27 @@ struct TagBadge: View {
     }
 }
 
+/// The tick at the start of a review row. Tapping it includes or skips
+/// the line without opening it; tapping the rest of the row opens it.
+struct IncludeToggle: View {
+    @Binding var isOn: Bool
+
+    var body: some View {
+        Button {
+            isOn.toggle()
+        } label: {
+            Image(systemName: isOn ? "checkmark.circle.fill" : "circle")
+                .font(.title2)
+                .foregroundStyle(isOn ? Theme.green : Color.secondary)
+                .frame(width: 34, height: 34)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.borderless)
+        .accessibilityLabel(isOn ? "Included" : "Skipped")
+        .accessibilityHint(isOn ? "Skips this item" : "Includes this item")
+    }
+}
+
 /// Horizontally scrolling filter chip.
 struct FilterChip: View {
     let title: String

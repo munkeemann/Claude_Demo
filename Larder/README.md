@@ -16,11 +16,59 @@ See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for the design and
 
 | Tab | What it does |
 |---|---|
-| Inventory | Items grouped by storage location, with search and filters, and an estimate of what's left for items nobody logs. Swipe for used some / used up / tossed. Add items by hand, by barcode (Open Food Facts), from a receipt, or by photographing a whole shelf (Claude). |
-| Soon | Items expiring soon, items that are probably finished (confirm in one tap), products predicted to run low (with confidence), and regulars you're probably out of. |
-| Recipes | Claude suggestions built around what's in stock, expiring items first. Filter by meal, time and missing ingredients. Add missing items to the list in one tap. "I cooked this" logs usage. Favorites. |
+| Inventory | Items grouped by storage location, with search and filters, and an estimate of what's left for items nobody logs. Swipe for used some / used up / tossed; freeze from the menu. **+** starts your usual way of adding (Quick Add, shelf photos, barcodes, a receipt, or one item by hand); hold it for the others. **−** scans things out: photos of what you're throwing away or finished, or of a recipe you cooked. |
+| Soon | Items expiring soon, items that are probably finished (confirm in one tap), products predicted to run low (with confidence), regulars you're probably out of, and a monthly food-waste summary. |
+| Recipes | Claude suggestions built around what's in stock, expiring items first. Filter by meal, time and missing ingredients. Add missing items to the list in one tap. "I cooked this" logs usage, and so does photographing a recipe you made. Favorites. |
 | Shopping | Suggested items from run-out predictions, plus your own entries. |
-| Settings | Household sharing, Claude API key and model, reminders (including "toss it" reminders) and look-ahead, storage locations, sample data. |
+| Settings | Household sharing, Claude API key and model, your default add method and how new items get dates, the household's date strictness, reminders (including "toss it" reminders) and look-ahead, storage locations, sample data, patch notes. |
+
+### Adding and removing in batches
+
+- **Quick Add**: type or dictate a list ("milk, a dozen eggs, 2 lb chicken thighs, paper towels").
+  Claude reads it when there's a key; otherwise it's parsed on the phone. Each item goes where it's
+  usually kept.
+- **Scan Barcodes** keeps the camera running: scan package after package (scanning one again adds
+  another), then review them all at once. Unknown barcodes can be identified from a photo of the
+  package.
+- **Scan a Shelf** takes several photos in one scan.
+- **Scanning out**: photograph what's being thrown away (several photos for a fridge clean-out) or
+  finished. Claude matches each thing to the inventory; you confirm, per item, whether it was tossed
+  or used up, and whether all of it went. Tossed food is waste, not use, so it doesn't speed up
+  run-out estimates. Photographing a recipe you cooked (the recipe, not the food) takes its
+  ingredients off the inventory.
+- Every review screen has a circle per item: tap it to skip the item, tap the item to edit it.
+  After saving, **Undo** is on screen for a few seconds.
+
+### How expiry dates are worked out
+
+Storage times come from USDA FSIS **FoodKeeper** (public domain), bundled with the app:
+about 660 foods with separate pantry, fridge and freezer times, and times after opening and after
+thawing, mostly as ranges ("3–5 days"). Each product is matched to a FoodKeeper entry by name
+(it can be changed on the item screen); without a match, Claude's estimate or a per-category table
+is used.
+
+- **Household strictness** (Settings → Expiration dates, shared by everyone in the home) picks the
+  point in USDA's range, from the short end (Very cautious) to the long end (Very relaxed). Relaxed
+  settings also give shelf-stable categories time past their printed best-by date (up to a year for
+  canned goods). Meat, poultry, seafood, deli, dairy, cheese, leftovers and baby food never go past
+  USDA's longest time or their printed date.
+- **Package dates** win over estimates. They can be typed or read with the camera; the text is
+  recognized on the phone.
+- **Opened** items get the after-opening time when that comes sooner. Using part of a single
+  container marks it opened, and moving sealed food from the pantry to the fridge asks.
+- **Freezing** restarts the clock on USDA's freezer time; taking something out starts the
+  after-thawing time. Moving between the pantry and fridge carries over the share of shelf life
+  already used.
+- How new items get dates is personal (Settings → Adding items): estimate them, scan package dates
+  (after adding, Larder walks through the items that usually have one), or leave them blank.
+
+`Larder/scripts/foodkeeper.py` regenerates the bundled data from the copy that the **FoodKeeper
+data** workflow downloads.
+
+### Siri and Shortcuts
+
+"Add to Larder" (then say the list), "Used something up in Larder", "Toss something in Larder" and
+"What's expiring in Larder" work from Siri, Shortcuts and the Action button.
 
 ### How usage is estimated
 
@@ -35,7 +83,8 @@ the estimate. "Running low" reminders fire a few days before the projected run-o
 
 ### Reminders
 
-Turn reminders on in **Settings**. Besides heads-up reminders before items expire or run out,
+Turn reminders on in **Settings**. Besides heads-up reminders before items expire or run out
+(with **Freeze It** and **Find a Recipe** buttons),
 **toss reminders** arrive the evening after something passes its date (6 PM by default), with a
 **Tossed them** button that clears the items without opening the app. The app icon badge counts
 items past their date.
@@ -128,8 +177,9 @@ One-time setup:
 
 After a push, a build shows up in TestFlight about 30–45 minutes later (tests, upload, then Apple's
 processing; the job waits for processing before revoking its certificate). Docs-only changes don't upload a build. To upload one without a code change, bump the
-number in `Larder/Config/testflight-build.txt` and push. The build number is the workflow run
-number, so it always increases.
+number in `Larder/Config/testflight-build.txt` and push, or run the **Larder iOS** workflow by hand
+(Actions → Run workflow). A manual run with **Upload to TestFlight** unticked only builds and
+tests. The build number is the workflow run number, so it always increases.
 
 ```sh
 cd Larder

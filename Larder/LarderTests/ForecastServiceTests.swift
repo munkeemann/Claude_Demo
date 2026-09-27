@@ -102,48 +102,111 @@ struct ForecastServiceTests {
 
     // MARK: Expiry estimates
 
-    @Test func addingPerishableEstimatesExpiryFromClimate() throws {
-        let draft = ItemDraft(name: "Milk", category: .dairy, locationID: try location(.fridge).id, purchaseDate: Self.now)
+    @Test func addingPerishableEstimatesFromUSDAData() throws {
+        // Yogurt: 1–2 weeks in the fridge; Balanced lands in the middle.
+        let draft = ItemDraft(name: "Yogurt", category: .dairy, locationID: try location(.fridge).id, purchaseDate: Self.now)
         let item = try store.addItem(from: draft, source: .manual)
-        #expect(item.expiryDate == days(7))
+        #expect(item.product?.foodKeeperID == 33)
+        #expect(item.expiryDate == days(11))
         #expect(!item.expiryIsOverride)
     }
 
-    @Test func productShelfLifeOverridesTable() throws {
+    @Test func productShelfLifeFillsInWhenUSDAHasNothing() throws {
         let first = try store.addItem(
-            from: ItemDraft(name: "Spinach", category: .produce, locationID: try location(.fridge).id, purchaseDate: Self.now),
+            from: ItemDraft(name: "Kimchi", category: .condiments, locationID: try location(.fridge).id, purchaseDate: Self.now),
             source: .manual
         )
+        #expect(first.product?.foodKeeperID == 0)
         first.product?.shelfLifeFridgeDays = 4
         let second = try store.addItem(
-            from: ItemDraft(name: "Spinach", category: .produce, locationID: try location(.fridge).id, purchaseDate: Self.now),
+            from: ItemDraft(name: "Kimchi", category: .condiments, locationID: try location(.fridge).id, purchaseDate: Self.now),
             source: .manual
         )
         #expect(second.expiryDate == days(4))
     }
 
-    @Test func movingToFreezerReEstimates() throws {
+    @Test func freezingRestartsTheClock() throws {
+        // Chicken: 1–2 days in the fridge, 12 months frozen.
         let item = try store.addItem(
             from: ItemDraft(name: "Chicken", category: .meat, locationID: try location(.fridge).id, purchaseDate: Self.now),
             source: .manual
         )
         #expect(item.expiryDate == days(2))
-        var draft = item.draft
-        draft.locationID = try location(.freezer).id
-        try store.update(item, from: draft)
-        #expect(item.expiryDate == days(120))
+        try store.freeze(item)
+        #expect(item.location?.kind == .freezer)
+        #expect(item.expiryDate == days(360))
     }
 
-    @Test func userSetExpiryIsNeverReEstimated() throws {
+    @Test func packageDatesHoldUntilFrozen() throws {
         let item = try store.addItem(
             from: ItemDraft(name: "Chicken", category: .meat, locationID: try location(.fridge).id,
                             purchaseDate: Self.now, expiryDate: days(5)),
             source: .manual
         )
+        #expect(item.printedExpiryDate == days(5))
+        #expect(item.expiryDate == days(5))
+        // Meat never gets time past its date, however relaxed the home is.
+        try store.setExpiryStrictness(.veryRelaxed)
+        #expect(item.expiryDate == days(5))
         var draft = item.draft
         draft.locationID = try location(.freezer).id
         try store.update(item, from: draft)
-        #expect(item.expiryDate == days(5))
+        #expect(item.expiryDate == days(360))
+    }
+
+    @Test func strictnessMovesEstimatesForTheWholeHome() throws {
+        let item = try store.addItem(
+            from: ItemDraft(name: "Yogurt", category: .dairy, locationID: try location(.fridge).id, purchaseDate: Self.now),
+            source: .manual
+        )
+        try store.setExpiryStrictness(.veryCautious)
+        #expect(item.expiryDate == days(7))
+        try store.setExpiryStrictness(.veryRelaxed)
+        #expect(item.expiryDate == days(14))
+        #expect(try store.householdSettings().expiryStrictness == .veryRelaxed)
+    }
+
+    @Test func openingShortensTheDate() throws {
+        // Salsa keeps a year sealed, a month once opened in the fridge.
+        let item = try store.addItem(
+            from: ItemDraft(name: "Salsa", category: .condiments, locationID: try location(.pantry).id, purchaseDate: Self.now),
+            source: .manual
+        )
+        #expect(item.expiryDate == days(365))
+        #expect(store.shouldAskIfOpened(item, movingTo: try location(.fridge)))
+        try store.moveItem(item, to: try location(.fridge), opened: true)
+        #expect(item.openedDate == Self.now)
+        #expect(item.expiryDate == days(30))
+    }
+
+    @Test func usingPartOfOneContainerOpensIt() throws {
+        var draft = ItemDraft(name: "Salsa", category: .condiments, locationID: try location(.fridge).id, purchaseDate: Self.now)
+        draft.unit = .jar
+        let jar = try store.addItem(from: draft, source: .manual)
+        try store.apply(.usedSome(0.5), to: jar)
+        #expect(jar.openedDate == Self.now)
+        // Using one of several cans leaves the rest sealed.
+        var cans = ItemDraft(name: "Black Beans", category: .canned, quantity: 3, locationID: try location(.pantry).id, purchaseDate: Self.now)
+        cans.unit = .can
+        let beans = try store.addItem(from: cans, source: .manual)
+        try store.apply(.usedSome(1), to: beans)
+        #expect(beans.openedDate == nil)
+    }
+
+    @Test func blankModeSkipsEstimates() throws {
+        var blankStore = store
+        blankStore.expiryMode = .blank
+        let item = try blankStore.addItem(
+            from: ItemDraft(name: "Yogurt", category: .dairy, locationID: try location(.fridge).id, purchaseDate: Self.now),
+            source: .manual
+        )
+        #expect(item.expiryTrackingOff)
+        #expect(item.expiryDate == nil)
+        // A package date added later still counts.
+        var draft = item.draft
+        draft.expiryDate = days(9)
+        try store.update(item, from: draft)
+        #expect(item.expiryDate == days(9))
     }
 
     @Test func householdGoodsGetNoExpiry() throws {
@@ -151,11 +214,18 @@ struct ForecastServiceTests {
         #expect(item.expiryDate == nil)
     }
 
-    @Test func refreshFillsMissingEstimates() throws {
+    @Test func refreshFillsMissingEstimatesAndKeepsOldManualDates() throws {
         let item = try store.addItem(from: ItemDraft(name: "Yogurt", category: .dairy, purchaseDate: Self.now), source: .manual)
         item.expiryDate = nil
-        try store.refreshEstimatedExpiries()
-        #expect(item.expiryDate == days(7))
+        // A date typed in before package dates were tracked separately.
+        let legacy = try store.addItem(from: ItemDraft(name: "Cheddar", category: .cheese, purchaseDate: Self.now), source: .manual)
+        legacy.expiryIsOverride = true
+        legacy.expiryDate = days(40)
+        try store.refreshAllExpiries()
+        #expect(item.expiryDate == days(11))
+        #expect(legacy.expiryIsOverride == false)
+        #expect(legacy.printedExpiryDate == days(40))
+        #expect(legacy.expiryDate == days(40))
     }
 
     // MARK: Forecasts from sample data

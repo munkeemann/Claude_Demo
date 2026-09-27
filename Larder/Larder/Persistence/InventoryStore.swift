@@ -21,6 +21,8 @@ enum InventoryStoreError: LocalizedError {
 struct InventoryStore {
     let context: ModelContext
     var now: () -> Date = Date.init
+    /// How this person wants dates on new items handled.
+    var expiryMode: ExpiryEntryMode = ExpiryPreferences.mode
 
     init(context: ModelContext, now: @escaping () -> Date = Date.init) {
         self.context = context
@@ -154,6 +156,10 @@ struct InventoryStore {
     }
 
     private func applyProductFields(from draft: ItemDraft, to product: Product) {
+        let renamed = product.name != draft.trimmedName || product.brand != draft.trimmedBrand || product.category != draft.category
+        if renamed && !product.foodKeeperIsManual {
+            product.foodKeeperID = nil
+        }
         product.name = draft.trimmedName
         product.brand = draft.trimmedBrand
         product.category = draft.category
@@ -194,14 +200,19 @@ struct InventoryStore {
             quantity: draft.quantity,
             unit: draft.unit,
             purchaseDate: draft.purchaseDate,
-            expiryDate: draft.expiryDate,
-            expiryIsOverride: draft.expiryDate != nil && !draft.expiryIsEstimate,
             notes: draft.notes,
             now: now()
         )
         context.insert(item)
         item.product = product
         item.location = try location(id: draft.locationID)
+        // A date someone entered is the one on the package; estimates are
+        // worked out below.
+        if let date = draft.expiryDate, !draft.expiryIsEstimate {
+            item.printedExpiryDate = date
+        }
+        item.openedDate = draft.openedDate
+        item.expiryTrackingOff = expiryMode == .blank && item.printedExpiryDate == nil
 
         // Remember a suggested shelf life for this climate unless one is set.
         if let days = draft.estimatedShelfLifeDays, let climate = item.location?.climate {
@@ -212,9 +223,7 @@ struct InventoryStore {
             default: break
             }
         }
-        if item.expiryDate == nil {
-            applyEstimatedExpiry(to: item)
-        }
+        refreshExpiry(item)
 
         guard logsPurchase else { return item }
         let purchase = PurchaseEvent(
@@ -325,18 +334,24 @@ struct InventoryStore {
     ///   projection. A count that went up after shopping logs the increase
     ///   as a purchase.
     /// - Unseen items the user marked finished are closed.
-    func importShelfScan(_ review: ShelfScanReview) throws {
+    @discardableResult
+    func importShelfScan(_ review: ShelfScanReview) throws -> [InventoryItem] {
         let lines = review.includedLines
         guard lines.allSatisfy(\.isValid) else { throw InventoryStoreError.invalidDraft([.missingName]) }
         let today = now()
+        var added: [InventoryItem] = []
 
         for line in lines {
             switch line.action {
             case .add:
-                let draft = line.draft(locationID: review.locationID, date: today)
+                var draft = line.draft(locationID: review.locationID, date: today)
+                if let full = line.fullQuantity, full > line.quantity {
+                    draft.openedDate = today
+                }
                 let product = try findOrCreateProduct(for: draft)
                 applyProductFields(from: draft, to: product)
-                let item = try insertStock(from: draft, product: product, source: .shelfScan, logsPurchase: review.justBought)
+                let item = try insertStock(from: draft, product: product, source: review.source, logsPurchase: review.justBought)
+                added.append(item)
                 if let full = line.fullQuantity, full > line.quantity {
                     item.initialQuantity = full
                     item.status = QuickActionCalculator.status(forQuantity: line.quantity, initialQuantity: full)
@@ -344,7 +359,7 @@ struct InventoryStore {
             case .update:
                 guard let id = line.matchedItemID, let item = try self.item(id: id) else { continue }
                 if review.justBought, line.increase > 0 {
-                    let purchase = PurchaseEvent(date: today, quantity: line.increase, unit: item.unit, source: .shelfScan, now: today)
+                    let purchase = PurchaseEvent(date: today, quantity: line.increase, unit: item.unit, source: review.source, now: today)
                     context.insert(purchase)
                     purchase.product = item.product
                 }
@@ -357,6 +372,7 @@ struct InventoryStore {
             }
         }
         try context.save()
+        return added
     }
 
     /// Applies edits from the item form. Quantity edits are corrections, so
@@ -367,11 +383,14 @@ struct InventoryStore {
             applyProductFields(from: draft, to: product)
             try attachBarcode(draft.barcode, to: product)
         }
-        let expiryEdited = draft.expiryDate != item.expiryDate
-        if expiryEdited {
-            item.expiryIsOverride = draft.expiryDate != nil
+        // The form edits the package date; the use-by date is worked out.
+        let printed = draft.expiryIsEstimate ? item.printedExpiryDate : draft.expiryDate
+        if printed != item.printedExpiryDate || item.expiryIsOverride {
+            item.printedExpiryDate = printed
+            item.expiryIsOverride = false
         }
-        item.expiryDate = draft.expiryDate
+        if printed != nil { item.expiryTrackingOff = false }
+        item.openedDate = draft.openedDate
         if draft.quantity != item.quantity || draft.unit != item.unit {
             item.quantityObservedAt = now()
         }
@@ -383,41 +402,14 @@ struct InventoryStore {
         item.status = QuickActionCalculator.status(forQuantity: draft.quantity, initialQuantity: item.initialQuantity)
         item.purchaseDate = draft.purchaseDate
         item.notes = draft.notes
-        let previousClimate = item.location?.climate
-        item.location = try location(id: draft.locationID)
-        // Moving an item to a colder or warmer place changes its estimate.
-        if !expiryEdited && !item.expiryIsOverride && item.location?.climate != previousClimate {
-            item.expiryDate = nil
-            applyEstimatedExpiry(to: item)
+        let destination = try location(id: draft.locationID)
+        if destination?.id != item.location?.id {
+            // Carries over used shelf life, and starts or stops the freezer clock.
+            move(item, to: destination)
         }
         item.updatedAt = now()
+        refreshExpiry(item)
         try context.save()
-    }
-
-    // MARK: - Expiry estimates
-
-    /// Sets an estimated expiry from the product's shelf life (for the item's
-    /// climate) or the category table. User-set dates are never touched.
-    func applyEstimatedExpiry(to item: InventoryItem) {
-        guard !item.expiryIsOverride, let product = item.product, product.tracksExpiry else { return }
-        let climate = item.location?.climate ?? product.category.defaultClimate
-        let estimate = ExpiryEstimator.estimate(
-            purchaseDate: item.purchaseDate,
-            category: product.category,
-            climate: climate,
-            productShelfLifeDays: product.shelfLifeDays(for: climate)
-        )
-        item.expiryDate = estimate?.date
-    }
-
-    /// Fills in estimates for in-stock items that have none. Safe to call
-    /// on every launch.
-    func refreshEstimatedExpiries() throws {
-        let items = try context.fetch(FetchDescriptor<InventoryItem>())
-        for item in items where item.expiryDate == nil && item.status.isActive {
-            applyEstimatedExpiry(to: item)
-        }
-        if context.hasChanges { try context.save() }
     }
 
     /// Removes an item entered by mistake. Purchase and usage history stays
@@ -430,6 +422,11 @@ struct InventoryStore {
     /// Applies a quick action and logs the matching usage event.
     @discardableResult
     func apply(_ action: QuickAction, to item: InventoryItem) throws -> QuickActionResult {
+        // Using part of one container (not one of several) opens it.
+        if case .usedSome = action, item.openedDate == nil, !item.unit.isDiscrete || item.quantity <= 1 {
+            item.openedDate = now()
+            refreshExpiry(item)
+        }
         let result = QuickActionCalculator.apply(action, to: item.state)
         item.quantity = result.quantity
         item.status = result.status
@@ -593,6 +590,8 @@ struct InventoryStore {
                     expiryDate: stock.expiresInDays.flatMap { calendar.date(byAdding: .day, value: $0, to: today) },
                     now: daysAgo(stock.purchasedDaysAgo)
                 )
+                // The sample's dates stand in for package dates.
+                item.printedExpiryDate = item.expiryDate
                 item.initialQuantity = stock.initialQuantity
                 item.status = QuickActionCalculator.status(forQuantity: stock.quantity, initialQuantity: stock.initialQuantity)
                 if stock.quantity < stock.initialQuantity {

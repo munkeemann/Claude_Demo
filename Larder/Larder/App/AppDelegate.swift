@@ -23,6 +23,9 @@ enum AppContainer {
 final class AppRouter {
     static let shared = AppRouter()
     var selectedTab: RootView.Tab = .inventory
+    /// Items a "Find a recipe" reminder asked about; Recipes suggests
+    /// dishes that use them, then clears this.
+    var recipeFocusItemIDs: [UUID]?
 }
 
 /// Handles notification taps and actions. iOS delivers these to a delegate
@@ -60,10 +63,15 @@ final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCent
 
     func userNotificationCenter(_ center: UNUserNotificationCenter, didReceive response: UNNotificationResponse) async {
         let userInfo = response.notification.request.content.userInfo
+        let ids = (userInfo[NotificationScheduler.itemIDsKey] as? [String] ?? []).compactMap(UUID.init(uuidString:))
         switch response.actionIdentifier {
         case NotificationScheduler.tossedAction:
-            let ids = (userInfo[NotificationScheduler.itemIDsKey] as? [String] ?? []).compactMap(UUID.init(uuidString:))
             await Reminders.markTossed(ids, container: AppContainer.shared)
+        case NotificationScheduler.freezeAction:
+            await Reminders.freeze(ids, container: AppContainer.shared)
+        case NotificationScheduler.recipeAction:
+            AppRouter.shared.recipeFocusItemIDs = ids
+            AppRouter.shared.selectedTab = .recipes
         case UNNotificationDefaultActionIdentifier:
             if userInfo[NotificationScheduler.tabKey] as? String == "soon" {
                 AppRouter.shared.selectedTab = .soon
