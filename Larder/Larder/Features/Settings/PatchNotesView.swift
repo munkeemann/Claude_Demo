@@ -20,6 +20,7 @@ struct PatchNotesView: View {
             "Review screens: tap the circle to skip an item without opening it.",
             "Brands: shelf scans read them off labels, Quick Add keeps the ones you say (and knows the ones you buy), and \"Stick to this brand\" on an item makes the shopping list name the brand.",
             "Expiry dates now come from USDA FoodKeeper storage times for 661 foods: pantry, fridge and freezer, after opening and after thawing.",
+            "Shelf-stable food (canned goods, condiments, pasta, snacks) gets dates too, with a shorter one once it's opened.",
             "New household setting for how cautious to be with dates, from Very cautious to Very relaxed. Meat, poultry, seafood, deli, dairy, leftovers and baby food never go past USDA's longest time.",
             "New personal setting: estimate dates, scan package dates, or leave them blank. Package dates can be read with the camera.",
             "Larder tracks when things are opened, and asks when you move something from the pantry to the fridge.",

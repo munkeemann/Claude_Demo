@@ -126,6 +126,25 @@ struct BatchFlowStoreTests {
         #expect(yogurt.product?.foodKeeperID == 33)
     }
 
+    // MARK: Shelf-stable dates
+
+    @Test func shelfStableFoodStartsGettingDates() throws {
+        let beans = try add("Black Beans", .canned, in: .pantry)
+        // A product saved when canned goods didn't track expiry.
+        beans.product?.tracksExpiry = false
+        store.refreshExpiry(beans)
+        #expect(beans.expiryDate == nil)
+        let defaults = try #require(UserDefaults(suiteName: "larder.tests.\(UUID().uuidString)"))
+        try store.startTrackingShelfStableExpiry(defaults: defaults)
+        try store.refreshAllExpiries()
+        #expect(beans.product?.tracksExpiry == true)
+        #expect(beans.expiryDate != nil)
+        // Only once: a later choice to turn it off sticks.
+        beans.product?.tracksExpiry = false
+        try store.startTrackingShelfStableExpiry(defaults: defaults)
+        #expect(beans.product?.tracksExpiry == false)
+    }
+
     // MARK: Waste
 
     @Test func wasteReportPricesTossedFood() throws {

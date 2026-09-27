@@ -17,6 +17,13 @@ struct ProductCategoryTests {
         }
     }
 
+    @Test func allFoodGetsExpiryDates() {
+        for category in ProductCategory.foodCategories {
+            #expect(category.defaultTracksExpiry, "\(category)")
+        }
+        #expect(ProductCategory.canned.defaultTracksExpiry && !ProductCategory.canned.isPerishable)
+    }
+
     @Test func milkLikeDairyIsBothIngredientAndRunOutTracked() {
         #expect(ProductCategory.dairy.defaultIsIngredient)
         #expect(ProductCategory.dairy.defaultTracksRunOut)

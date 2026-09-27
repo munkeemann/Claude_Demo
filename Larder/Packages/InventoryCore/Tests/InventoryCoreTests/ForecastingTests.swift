@@ -40,7 +40,7 @@ struct ShelfLifeTests {
     }
 
     @Test func colderIsNeverShorterForPerishables() {
-        for category in ProductCategory.allCases where category.defaultTracksExpiry && category != .frozen {
+        for category in ProductCategory.allCases where category.isPerishable && category != .frozen {
             let room = ShelfLifeTable.days(for: category, climate: .room)!
             let fridge = ShelfLifeTable.days(for: category, climate: .fridge)!
             let freezer = ShelfLifeTable.days(for: category, climate: .freezer)!

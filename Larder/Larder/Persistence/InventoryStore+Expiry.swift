@@ -128,7 +128,10 @@ extension InventoryStore {
     func refreshExpiry(_ item: InventoryItem, strictness: ExpiryStrictness? = nil) {
         guard !item.expiryIsOverride else { return }
         let date: Date?
-        if item.printedExpiryDate == nil && (item.expiryTrackingOff || !(item.product?.tracksExpiry ?? false)) {
+        let tracks = item.product?.tracksExpiry ?? false
+        // A package date always counts; so does opening something, unless
+        // it was added with dates left blank.
+        if item.printedExpiryDate == nil && (item.expiryTrackingOff || (!tracks && item.openedDate == nil)) {
             date = nil
         } else {
             if let product = item.product { ensureFoodKeeperMatch(product) }
@@ -150,6 +153,21 @@ extension InventoryStore {
             refreshExpiry(item, strictness: strictness)
         }
         if context.hasChanges { try context.save() }
+    }
+
+    /// Before USDA data, shelf-stable food (canned, condiments, grains,
+    /// snacks, drinks, spices) got no dates by default. Turns dates on for
+    /// those products once; runs at launch.
+    func startTrackingShelfStableExpiry(defaults: UserDefaults = .standard) throws {
+        let key = "expiry.shelfStableTracking.v1"
+        guard !defaults.bool(forKey: key) else { return }
+        for product in try context.fetch(FetchDescriptor<Product>())
+        where !product.tracksExpiry && product.category.isFood && !product.category.isPerishable {
+            product.tracksExpiry = true
+            product.updatedAt = now()
+        }
+        if context.hasChanges { try context.save() }
+        defaults.set(true, forKey: key)
     }
 
     // MARK: - Moving, opening, freezing

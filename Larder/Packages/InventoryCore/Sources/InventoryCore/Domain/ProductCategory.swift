@@ -104,12 +104,15 @@ public enum ProductCategory: String, CaseIterable, Codable, Sendable, Identifiab
     }
 
     /// Whether products in this category are perishable enough to track expiry by default.
-    public var defaultTracksExpiry: Bool {
+    /// Every food gets a date: USDA storage times cover shelf-stable food
+    /// too, and an opened jar of salsa matters as much as fresh spinach.
+    public var defaultTracksExpiry: Bool { isFood }
+
+    /// Food that spoils within days or weeks rather than months or years.
+    public var isPerishable: Bool {
         switch self {
-        case .produce, .meat, .seafood, .dairy, .cheese, .eggs, .bakery, .deli, .frozen, .leftovers:
-            true
-        default:
-            false
+        case .produce, .meat, .seafood, .dairy, .cheese, .eggs, .bakery, .deli, .frozen, .leftovers: true
+        default: false
         }
     }
 
