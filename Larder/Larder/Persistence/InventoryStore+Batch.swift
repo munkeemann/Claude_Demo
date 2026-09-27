@@ -41,6 +41,24 @@ extension InventoryStore {
         return count
     }
 
+    // MARK: - Brands
+
+    /// Brands the household has bought, for recognizing them in typed lists.
+    func knownBrands() throws -> [String] {
+        let brands = try context.fetch(FetchDescriptor<Product>()).compactMap { product -> String? in
+            let brand = product.brand?.trimmingCharacters(in: .whitespaces) ?? ""
+            return brand.isEmpty ? nil : brand
+        }
+        var seen = Set<String>()
+        return brands.filter { seen.insert($0.lowercased()).inserted }.sorted()
+    }
+
+    func setBrandMatters(_ product: Product, _ matters: Bool) throws {
+        product.brandMatters = matters
+        product.updatedAt = now()
+        try context.save()
+    }
+
     // MARK: - Quick Add
 
     /// Where a new item goes: its category's usual place, unless it's kept

@@ -27,6 +27,8 @@ public struct ItemDraft: Sendable, Hashable {
     public var estimatedShelfLifeDays: Int?
     /// When the package was opened, if it has been.
     public var openedDate: Date?
+    /// Only buy this brand. nil leaves the product's setting as it is.
+    public var brandMatters: Bool?
 
     public init(
         name: String = "",

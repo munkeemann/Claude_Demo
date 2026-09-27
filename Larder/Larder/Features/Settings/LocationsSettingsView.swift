@@ -12,7 +12,7 @@ struct LocationsSettingsView: View {
     var body: some View {
         List {
             Section {
-                ForEach(locations) { location in
+                ForEach(locations, id: \StorageLocation.id) { location in
                     Button {
                         editing = .existing(location)
                     } label: {

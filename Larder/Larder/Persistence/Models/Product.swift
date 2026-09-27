@@ -26,6 +26,8 @@ final class Product {
     /// The person picked the entry; renaming doesn't re-match it.
     var foodKeeperIsManual: Bool = false
     var isIngredient: Bool = false
+    /// Only this brand will do; the shopping list names it.
+    var brandMatters: Bool = false
     var tracksRunOut: Bool = true
     var tracksExpiry: Bool = false
     var createdAt: Date = Date()

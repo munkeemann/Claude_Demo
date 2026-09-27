@@ -167,6 +167,7 @@ struct InventoryStore {
         product.isIngredient = draft.isIngredient
         product.tracksRunOut = draft.tracksRunOut
         product.tracksExpiry = draft.tracksExpiry
+        if let brandMatters = draft.brandMatters { product.brandMatters = brandMatters }
         if let size = draft.packageSizeText, !size.isEmpty { product.packageSizeText = size }
         if let url = draft.imageURL { product.imageURL = url }
         product.updatedAt = now()

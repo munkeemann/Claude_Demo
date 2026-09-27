@@ -19,8 +19,9 @@ public protocol LLMService: Sendable {
     /// Reads a recipe from photos of it, matching ingredients to inventory.
     func readRecipe(_ input: RecipeScanInput) async throws -> Recipe
 
-    /// Turns a typed or dictated list into items.
-    func parseQuickAdd(_ text: String) async throws -> QuickAddResult
+    /// Turns a typed or dictated list into items, keeping brands (spelled
+    /// like the household's known ones).
+    func parseQuickAdd(_ text: String, knownBrands: [String]) async throws -> QuickAddResult
 
     /// Confirms the service is usable (for example, that the API key works).
     func verify() async throws
@@ -98,13 +99,13 @@ public struct AnthropicLLMService: LLMService {
         )
     }
 
-    public func parseQuickAdd(_ text: String) async throws -> QuickAddResult {
+    public func parseQuickAdd(_ text: String, knownBrands: [String]) async throws -> QuickAddResult {
         guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return QuickAddResult(items: []) }
         return try await client.structuredOutput(
             QuickAddResult.self,
             model: model(),
             system: QuickAddPrompt.system,
-            user: QuickAddPrompt.userText(for: text),
+            user: QuickAddPrompt.userText(for: text, knownBrands: knownBrands),
             schema: QuickAddSchema.schema
         )
     }
@@ -162,9 +163,9 @@ public struct MockLLMService: LLMService {
     }
 
     /// Parses on the phone, like the no-key fallback.
-    public func parseQuickAdd(_ text: String) async throws -> QuickAddResult {
+    public func parseQuickAdd(_ text: String, knownBrands: [String]) async throws -> QuickAddResult {
         if delay > 0 { try await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000)) }
-        return QuickAddResult(items: QuickAddParser.parse(text))
+        return QuickAddResult(items: QuickAddParser.parse(text, knownBrands: knownBrands))
     }
 
     public func verify() async throws {}

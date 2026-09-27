@@ -117,6 +117,7 @@ final class InventoryItem {
             draft.isIngredient = product.isIngredient
             draft.tracksRunOut = product.tracksRunOut
             draft.tracksExpiry = product.tracksExpiry
+            draft.brandMatters = product.brandMatters
         }
         draft.openedDate = openedDate
         return draft

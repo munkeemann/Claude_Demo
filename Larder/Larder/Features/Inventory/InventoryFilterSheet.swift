@@ -27,8 +27,9 @@ struct InventoryFilterSheet: View {
                 }
 
                 Section("Locations") {
-                    ForEach(locations) { location in
-                        toggleRow(location.name, systemImage: location.systemImage, isOn: membership(location.id, in: \.locationIDs))
+                    ForEach(locations, id: \StorageLocation.id) { location in
+                        let id: UUID = location.id
+                        toggleRow(location.name, systemImage: location.systemImage, isOn: membership(id, in: \InventoryFilter.locationIDs))
                     }
                 }
 

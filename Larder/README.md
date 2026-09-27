@@ -36,6 +36,10 @@ See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for the design and
   or used up, and whether all of it went. Tossed food is waste, not use, so it doesn't speed up
   run-out estimates. Photographing a recipe you cooked (the recipe, not the food) takes its
   ingredients off the inventory.
+- **Brands** are kept wherever they show up: receipts (store brands too), barcodes, labels in shelf
+  photos, and lists ("Tillamook cheddar"; Quick Add also recognizes brands the household already
+  buys). Turn on **Stick to this brand** for a product and the shopping list says which brand to
+  buy; leave it off where any brand will do.
 - Every review screen has a circle per item: tap it to skip the item, tap the item to edit it.
   After saving, **Undo** is on screen for a few seconds.
 

@@ -209,6 +209,10 @@ public enum ShelfScanPrompt {
     - One entry per distinct product. Identical packages side by side are one entry with a \
     count; different flavors, varieties or brands are separate entries.
 
+    - brand: read it off the label whenever any of it shows, store brands included (Great Value, \
+    Kirkland Signature, 365). Some households care which brand they buy. Null for loose produce \
+    and when no label is visible.
+
     Amounts:
     - quantity/unit: choose what makes consumption easy to track.
       - Packaged goods: the number of packages with the container word (can, jar, box, bag, \

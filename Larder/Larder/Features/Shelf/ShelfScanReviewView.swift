@@ -243,7 +243,7 @@ private struct ShelfLineEditor: View {
                         get: { line.locationID ?? defaultLocationID },
                         set: { line.locationID = $0 }
                     )) {
-                        ForEach(locations) { location in
+                        ForEach(locations, id: \StorageLocation.id) { location in
                             Label(location.name, systemImage: location.systemImage).tag(Optional(location.id))
                         }
                     }

@@ -84,7 +84,7 @@ struct QuickAddView: View {
                         .scrollContentBackground(.hidden)
                 }
             } footer: {
-                Text("One item per line or separated by commas. Tap the microphone on the keyboard to say the list instead. \(environment.hasAPIKey ? "Claude sorts out names, amounts and where each thing goes." : "Add a Claude key in Settings for smarter reading of long or spoken lists.")")
+                Text("One item per line or separated by commas. Say the brand when it matters (\"Tillamook cheddar\"). Tap the microphone on the keyboard to say the list instead. \(environment.hasAPIKey ? "Claude sorts out names, amounts and where each thing goes." : "Add a Claude key in Settings for smarter reading of long or spoken lists.")")
             }
         }
         .safeAreaInset(edge: .bottom) {
@@ -105,21 +105,22 @@ struct QuickAddView: View {
         let list = text
         let useClaude = environment.hasAPIKey
         let llm = environment.llm
+        let brands = (try? InventoryStore(context: modelContext).knownBrands()) ?? []
         stage = .working
         work = Task {
             var items: [QuickAddItem]
             if useClaude {
                 do {
-                    items = try await llm.parseQuickAdd(list).items
+                    items = try await llm.parseQuickAdd(list, knownBrands: brands).items
                 } catch is CancellationError {
                     stage = .entry
                     return
                 } catch {
                     // Still useful offline: fall back to reading it here.
-                    items = QuickAddParser.parse(list)
+                    items = QuickAddParser.parse(list, knownBrands: brands)
                 }
             } else {
-                items = QuickAddParser.parse(list)
+                items = QuickAddParser.parse(list, knownBrands: brands)
             }
             guard !Task.isCancelled else { return }
             guard !items.isEmpty else {

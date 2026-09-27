@@ -99,13 +99,21 @@ public enum QuickAddPrompt {
     "a dozen eggs" is quantity 1, unit "dozen"; "3 cans of beans" is quantity 3, unit "can").
     - Without an amount: quantity 1 with a sensible unit (a loaf of bread is 1 "each", milk is 1 "gal" \
     in the US, a bag of potatoes is 1 "bag").
+    - brand: keep any brand that was said or typed ("tillamook cheddar" is brand "Tillamook", name \
+    "Cheddar Cheese"; "kirkland paper towels" is brand "Kirkland Signature"). Brands this household \
+    already buys are listed; use their spelling. Null when no brand was mentioned.
     - Fix obvious dictation errors and capitalize names. Don't invent items that weren't mentioned.
     - storage: where it's normally kept (potatoes, onions and bananas in the pantry; frozen foods in \
     the freezer).
     """
 
-    public static func userText(for text: String) -> String {
-        "The list:\n\(text.trimmingCharacters(in: .whitespacesAndNewlines))"
+    public static func userText(for text: String, knownBrands: [String] = []) -> String {
+        var sections: [String] = []
+        if !knownBrands.isEmpty {
+            sections.append("Brands this household buys: \(knownBrands.joined(separator: ", ")).")
+        }
+        sections.append("The list:\n\(text.trimmingCharacters(in: .whitespacesAndNewlines))")
+        return sections.joined(separator: "\n\n")
     }
 }
 
@@ -136,8 +144,15 @@ public enum QuickAddParser {
         "heads": .each,
     ]
 
-    public static func parse(_ text: String) -> [QuickAddItem] {
-        pieces(of: text).compactMap(item(from:))
+    /// - Parameter knownBrands: brands the household buys; a piece starting
+    ///   with one ("tillamook cheddar") keeps it as the brand.
+    public static func parse(_ text: String, knownBrands: [String] = []) -> [QuickAddItem] {
+        // Longest first, so "Trader Joe's" wins over "Trader".
+        let brands = knownBrands
+            .map { $0.trimmingCharacters(in: .whitespaces) }
+            .filter { !$0.isEmpty }
+            .sorted { $0.count > $1.count }
+        return pieces(of: text).compactMap { item(from: $0, knownBrands: brands) }
     }
 
     /// The list split into one string per item.
@@ -154,7 +169,7 @@ public enum QuickAddParser {
         .filter { !$0.isEmpty }
     }
 
-    static func item(from piece: String) -> QuickAddItem? {
+    static func item(from piece: String, knownBrands: [String] = []) -> QuickAddItem? {
         var words = piece.split(separator: " ").map(String.init)
         var quantity: Double?
         var unit: MeasureUnit?
@@ -187,7 +202,16 @@ public enum QuickAddParser {
         }
         if words.first?.lowercased() == "of" { words.removeFirst() }
 
-        let name = words.joined(separator: " ").trimmingCharacters(in: .whitespaces)
+        var name = words.joined(separator: " ").trimmingCharacters(in: .whitespaces)
+        var brand: String?
+        for known in knownBrands {
+            let prefix = known.lowercased() + " "
+            if name.lowercased().hasPrefix(prefix), name.count > prefix.count {
+                brand = known
+                name = String(name.dropFirst(prefix.count)).trimmingCharacters(in: .whitespaces)
+                break
+            }
+        }
         guard !name.isEmpty else { return nil }
         let entry = FoodKeeper.match(name: name)
         let category = ProductCategoryGuess.category(for: name, foodKeeper: entry)
@@ -204,6 +228,7 @@ public enum QuickAddParser {
         }
         return QuickAddItem(
             name: capitalized(name),
+            brand: brand,
             category: category,
             quantity: resolvedQuantity,
             unit: resolvedUnit,

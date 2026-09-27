@@ -166,7 +166,7 @@ struct InventoryHomeView: View {
                 FilterChip(title: "All", isSelected: filter.locationIDs.isEmpty) {
                     filter.locationIDs = []
                 }
-                ForEach(locations) { location in
+                ForEach(locations, id: \StorageLocation.id) { location in
                     FilterChip(
                         title: location.name,
                         systemImage: location.systemImage,

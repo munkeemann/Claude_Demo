@@ -44,6 +44,9 @@ struct ShoppingListView: View {
                             HStack {
                                 VStack(alignment: .leading, spacing: 2) {
                                     Text(suggestion.name)
+                                    if let brand = requiredBrand(for: suggestion) {
+                                        BrandTag(brand: brand)
+                                    }
                                     Text(reasonText(suggestion))
                                         .font(.caption)
                                         .foregroundStyle(.secondary)
@@ -103,6 +106,12 @@ struct ShoppingListView: View {
         }
     }
 
+    /// The brand to buy, for products where it matters.
+    private func requiredBrand(for suggestion: ShoppingSuggestion) -> String? {
+        guard let product = try? store.product(id: suggestion.productID), product.brandMatters else { return nil }
+        return product.brand
+    }
+
     private func reasonText(_ suggestion: ShoppingSuggestion) -> String {
         let amount = suggestion.unit.label(for: suggestion.quantity)
         switch suggestion.reason {
@@ -158,6 +167,9 @@ private struct ShoppingRow: View {
                     Text(entry.name)
                         .strikethrough(entry.isChecked)
                         .foregroundStyle(entry.isChecked ? .secondary : .primary)
+                    if let product = entry.product, product.brandMatters, let brand = product.brand, !brand.isEmpty {
+                        BrandTag(brand: brand)
+                    }
                     Text(detail)
                         .font(.caption)
                         .foregroundStyle(.secondary)
@@ -175,6 +187,17 @@ private struct ShoppingRow: View {
         if entry.reason != .manual { parts.append(entry.reason.displayName) }
         if let note = entry.note, !note.isEmpty { parts.append(note) }
         return parts.joined(separator: " · ")
+    }
+}
+
+/// "Tillamook only" under a shopping-list item whose brand matters.
+struct BrandTag: View {
+    let brand: String
+
+    var body: some View {
+        Label("\(brand) only", systemImage: "tag.fill")
+            .font(.caption.weight(.semibold))
+            .foregroundStyle(Theme.honeyInk)
     }
 }
 

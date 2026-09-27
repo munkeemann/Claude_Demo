@@ -17,7 +17,7 @@ struct AddToLarderIntent: AppIntent {
     func perform() async throws -> some IntentResult & ProvidesDialog {
         let context = AppContainer.shared.mainContext
         let store = InventoryStore(context: context)
-        let parsed = QuickAddParser.parse(items)
+        let parsed = QuickAddParser.parse(items, knownBrands: (try? store.knownBrands()) ?? [])
         guard !parsed.isEmpty else {
             return .result(dialog: "I didn't catch any items.")
         }

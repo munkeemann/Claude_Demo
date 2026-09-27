@@ -106,6 +106,7 @@ struct SyncMapper {
         f.set("foodKeeperID", product.foodKeeperID)
         f.set("foodKeeperIsManual", product.foodKeeperIsManual)
         f.set("isIngredient", product.isIngredient)
+        f.set("brandMatters", product.brandMatters)
         f.set("tracksRunOut", product.tracksRunOut)
         f.set("tracksExpiry", product.tracksExpiry)
         f.set("createdAt", product.createdAt)
@@ -269,6 +270,7 @@ struct SyncMapper {
             if r.has("foodKeeperID") { object.foodKeeperID = r.int("foodKeeperID") }
             if let v = r.bool("foodKeeperIsManual") { object.foodKeeperIsManual = v }
             if let v = r.bool("isIngredient") { object.isIngredient = v }
+            if let v = r.bool("brandMatters") { object.brandMatters = v }
             if let v = r.bool("tracksRunOut") { object.tracksRunOut = v }
             if let v = r.bool("tracksExpiry") { object.tracksExpiry = v }
             if let v = r.date("createdAt") { object.createdAt = v }

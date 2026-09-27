@@ -51,6 +51,13 @@ struct ItemEditorView: View {
                     .textInputAutocapitalization(.words)
                 TextField("Brand (optional)", text: $draft.brand)
                     .textInputAutocapitalization(.words)
+                if !draft.brand.trimmingCharacters(in: .whitespaces).isEmpty {
+                    Toggle("Stick to this brand", isOn: Binding(
+                        get: { draft.brandMatters ?? false },
+                        set: { draft.brandMatters = $0 }
+                    ))
+                    .tint(Theme.green)
+                }
                 Picker("Category", selection: $draft.category) {
                     Section("Food") {
                         ForEach(ProductCategory.foodCategories) { category in
@@ -85,7 +92,7 @@ struct ItemEditorView: View {
             Section("Storage") {
                 Picker("Location", selection: $draft.locationID) {
                     Text("None").tag(UUID?.none)
-                    ForEach(locations) { location in
+                    ForEach(locations, id: \StorageLocation.id) { location in
                         Label(location.name, systemImage: location.systemImage).tag(Optional(location.id))
                     }
                 }

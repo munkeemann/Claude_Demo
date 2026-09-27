@@ -173,8 +173,9 @@ struct ForecastServiceTests {
             source: .manual
         )
         #expect(item.expiryDate == days(365))
-        #expect(store.shouldAskIfOpened(item, movingTo: try location(.fridge)))
-        try store.moveItem(item, to: try location(.fridge), opened: true)
+        let fridge = try location(.fridge)
+        #expect(store.shouldAskIfOpened(item, movingTo: fridge))
+        try store.moveItem(item, to: fridge, opened: true)
         #expect(item.openedDate == Self.now)
         #expect(item.expiryDate == days(30))
     }

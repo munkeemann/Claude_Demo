@@ -53,6 +53,20 @@ struct ItemDetailView: View {
                 if let size = item.product?.packageSizeText {
                     LabeledContent("Package size", value: size)
                 }
+                if let product = item.product, let brand = product.brand, !brand.isEmpty {
+                    Toggle(isOn: Binding(
+                        get: { product.brandMatters },
+                        set: { matters in perform { try store.setBrandMatters(product, matters) } }
+                    )) {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Stick to \(brand)")
+                            Text("The shopping list will say which brand to buy.")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                    .tint(Theme.green)
+                }
                 if !item.notes.isEmpty {
                     Text(item.notes)
                         .foregroundStyle(.secondary)
@@ -107,7 +121,7 @@ struct ItemDetailView: View {
                         }
                     }
                     Menu {
-                        ForEach(locations.filter { $0.id != item.location?.id }) { location in
+                        ForEach(locations.filter { $0.id != item.location?.id }, id: \StorageLocation.id) { location in
                             Button { move(to: location) } label: {
                                 Label(location.name, systemImage: location.systemImage)
                             }

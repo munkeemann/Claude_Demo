@@ -189,7 +189,7 @@ struct ReceiptLineEditor: View {
             Section {
                 Picker("Location", selection: $line.locationID) {
                     Text("None").tag(UUID?.none)
-                    ForEach(locations) { location in
+                    ForEach(locations, id: \StorageLocation.id) { location in
                         Label(location.name, systemImage: location.systemImage).tag(Optional(location.id))
                     }
                 }

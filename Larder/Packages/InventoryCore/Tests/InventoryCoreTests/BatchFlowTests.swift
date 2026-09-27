@@ -114,6 +114,17 @@ struct QuickAddTests {
         #expect(items[4].category == .produce)
     }
 
+    @Test func keepsKnownBrands() {
+        let items = QuickAddParser.parse("tillamook sharp cheddar, 2 fage yogurt, trader joe's olive oil, milk", knownBrands: ["Tillamook", "Fage", "Trader Joe's", "Trader"])
+        #expect(items.map(\.brand) == ["Tillamook", "Fage", "Trader Joe's", nil])
+        #expect(items.map(\.name) == ["Sharp Cheddar", "Yogurt", "Olive Oil", "Milk"])
+        #expect(items[0].category == .cheese)
+        #expect(items[1].quantity == 2)
+        // A brand alone isn't an item name to strip.
+        #expect(QuickAddParser.parse("fage", knownBrands: ["Fage"]).first?.name == "Fage")
+        #expect(QuickAddPrompt.userText(for: "milk", knownBrands: ["Fage"]).contains("Brands this household buys: Fage."))
+    }
+
     @Test func keepsFoodsWithAndInTheName() {
         #expect(QuickAddParser.parse("half and half").map(\.name) == ["Half And Half"])
         #expect(QuickAddParser.parse("mac and cheese, milk").count == 2)
