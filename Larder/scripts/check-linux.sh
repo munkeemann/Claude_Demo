@@ -9,7 +9,7 @@ ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 docker run --rm -v "$ROOT":/work -w /work "$IMAGE" bash -c '
   set -euo pipefail
   status=0
-  for f in $(find Larder LarderTests -name "*.swift"); do
+  for f in $(find Larder LarderWidgets LarderTests -name "*.swift"); do
     if ! out=$(swiftc -parse "$f" 2>&1); then echo "$out"; status=1; fi
   done
   echo "App sources parsed (status $status)"

@@ -72,7 +72,17 @@ data** workflow downloads.
 ### Siri and Shortcuts
 
 "Add to Larder" (then say the list), "Used something up in Larder", "Toss something in Larder" and
-"What's expiring in Larder" work from Siri, Shortcuts and the Action button.
+"What's expiring in Larder" work from Siri, Shortcuts and the Action button. Any add or scan-out
+flow can be opened by name too ("Scan Barcodes in Larder").
+
+### Lock Screen and Control Center buttons
+
+The **LarderWidgets** extension (iOS 18 and later) adds a Larder control for a Lock Screen
+corner, Control Center or the Action button. Each one is set to an action when it's added (your
+usual way of adding, barcodes, a shelf, a receipt, Quick Add, toss out, used up, or a cooked
+recipe) and opens the app straight to it. The extension stores nothing, so it needs no App Group.
+CI registers its App ID (`com.munkeemann.larder.widgets`) the first time and signs it with its
+own temporary profile.
 
 ### How usage is estimated
 

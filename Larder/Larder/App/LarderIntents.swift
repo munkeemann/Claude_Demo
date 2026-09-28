@@ -95,6 +95,12 @@ struct LarderShortcuts: AppShortcutsProvider {
             systemImageName: "xmark.bin"
         )
         AppShortcut(
+            intent: OpenLarderIntent(),
+            phrases: ["\(\.$action) in \(.applicationName)", "Open \(.applicationName) to \(\.$action)"],
+            shortTitle: "Scan In or Out",
+            systemImageName: "barcode.viewfinder"
+        )
+        AppShortcut(
             intent: WhatsExpiringIntent(),
             phrases: ["What's expiring in \(.applicationName)", "What should I use up in \(.applicationName)"],
             shortTitle: "What's Expiring",

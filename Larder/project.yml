@@ -35,6 +35,7 @@ targets:
     dependencies:
       - package: InventoryCore
         product: InventoryCore
+      - target: LarderWidgets
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.munkeemann.larder
@@ -55,6 +56,27 @@ targets:
       testTargets:
         - LarderTests
       gatherCoverageData: true
+
+  # Lock Screen and Control Center buttons (iOS 18 and later). Shares the
+  # intent that opens the app; needs no App Group because it stores nothing.
+  LarderWidgets:
+    type: app-extension
+    platform: iOS
+    deploymentTarget: "18.0"
+    sources:
+      - path: LarderWidgets
+      - path: Larder/App/LarderAction.swift
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.munkeemann.larder.widgets
+        PRODUCT_NAME: LarderWidgets
+        GENERATE_INFOPLIST_FILE: YES
+        INFOPLIST_FILE: Config/LarderWidgets-Info.plist
+        INFOPLIST_KEY_CFBundleDisplayName: Larder
+        SKIP_INSTALL: YES
+        APPLICATION_EXTENSION_API_ONLY: YES
+        SWIFT_ACTIVE_COMPILATION_CONDITIONS: "$(inherited) WIDGET_EXTENSION"
+        TARGETED_DEVICE_FAMILY: "1,2"
 
   LarderTests:
     type: bundle.unit-test

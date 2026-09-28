@@ -10,6 +10,11 @@ struct PatchNotesView: View {
     }
 
     static let releases: [Release] = [
+        Release(title: "Lock Screen buttons", date: "September 28, 2026", notes: [
+            "Put a Larder button in a Lock Screen corner, in Control Center, or on the Action button (iOS 18 or later). When you add it, pick what it opens: your usual way of adding, barcodes, a shelf, a receipt, Quick Add, Toss Things Out, Used Things Up, or I Cooked a Recipe.",
+            "To add one: hold the Lock Screen, tap Customize, then Lock Screen, remove a corner button and pick Larder.",
+            "Siri and Shortcuts: say an action with \"in Larder\", like \"Scan Barcodes in Larder\".",
+        ]),
         Release(title: "Scan things out, smarter dates", date: "September 27, 2026", notes: [
             "Scan things out: photograph what you're throwing away or finished, several photos at a time for a fridge clean-out, and Larder takes it off your inventory. Tossed food counts as waste, not as eating it.",
             "Photograph a recipe you cooked and Larder takes the ingredients off your inventory.",

@@ -225,6 +225,11 @@ jobs:
             find "$APP/Frameworks" -maxdepth 1 \( -name '*.framework' -o -name '*.dylib' \) \
               -exec codesign --force --sign - --timestamp=none {} \;
           fi
+          # Extensions (the Lock Screen buttons) need no entitlements of their own.
+          if [ -d "$APP/PlugIns" ]; then
+            find "$APP/PlugIns" -maxdepth 1 -name '*.appex' \
+              -exec codesign --force --sign - --timestamp=none {} \;
+          fi
           codesign --force --sign - --timestamp=none --entitlements Config/Larder.entitlements "$APP"
           codesign -d --entitlements :- "$APP"
 
@@ -243,6 +248,7 @@ jobs:
           "$RUNNER_TEMP/venv/bin/python" Larder/scripts/asc_signing.py prepare \
             --out "$RUNNER_TEMP/signing" \
             --bundle-id com.munkeemann.larder \
+            --extension-bundle-id com.munkeemann.larder.widgets \
             --profile-name "Larder CI build $BUILD_NUMBER attempt $GITHUB_RUN_ATTEMPT"
 
       - name: Install the signing identity and profile
@@ -259,12 +265,14 @@ jobs:
           security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN" > /dev/null
           security list-keychains -d user -s "$KEYCHAIN" $(security list-keychains -d user | tr -d '"')
           security find-identity -v -p codesigning "$KEYCHAIN"
-          UUID="$(python3 -c "import json; print(json.load(open('$RUNNER_TEMP/signing/state.json'))['profileUuid'])")"
+          # One profile for the app and one per extension, named by UUID.
           for dir in "$HOME/Library/MobileDevice/Provisioning Profiles" "$HOME/Library/Developer/Xcode/UserData/Provisioning Profiles"; do
             mkdir -p "$dir"
-            cp "$RUNNER_TEMP/signing/profile.mobileprovision" "$dir/$UUID.mobileprovision"
+            cp "$RUNNER_TEMP"/signing/profiles/*.mobileprovision "$dir/"
           done
-          security cms -D -i "$RUNNER_TEMP/signing/profile.mobileprovision" | plutil -extract Entitlements xml1 -o - - || true
+          for profile in "$RUNNER_TEMP"/signing/profiles/*.mobileprovision; do
+            security cms -D -i "$profile" | plutil -extract Entitlements xml1 -o - - || true
+          done
 
       - name: Sign and check entitlements
         # A trial export (no upload) proves the App Store-signed app keeps its
@@ -273,7 +281,7 @@ jobs:
         run: |
           "$RUNNER_TEMP/venv/bin/python" scripts/asc_signing.py export-options \
             --state "$RUNNER_TEMP/signing/state.json" --destination export \
-            --team-id NX8A5B7T82 --bundle-id com.munkeemann.larder \
+            --team-id NX8A5B7T82 \
             --out "$RUNNER_TEMP/ExportOptions-check.plist"
           if ! xcodebuild -exportArchive \
             -archivePath "$RUNNER_TEMP/Larder.xcarchive" \
@@ -311,7 +319,7 @@ jobs:
           set -o pipefail
           "$RUNNER_TEMP/venv/bin/python" scripts/asc_signing.py export-options \
             --state "$RUNNER_TEMP/signing/state.json" --destination upload \
-            --team-id NX8A5B7T82 --bundle-id com.munkeemann.larder \
+            --team-id NX8A5B7T82 \
             --out "$RUNNER_TEMP/ExportOptions-upload.plist"
           xcodebuild -exportArchive \
             -archivePath "$RUNNER_TEMP/Larder.xcarchive" \

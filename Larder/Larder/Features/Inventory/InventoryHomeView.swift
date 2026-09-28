@@ -61,6 +61,8 @@ struct InventoryHomeView: View {
             InventoryFilterSheet(filter: $filter, locations: locations)
         }
         .errorAlert($errorMessage)
+        .onAppear { open(AppRouter.shared.pendingAction) }
+        .onChange(of: AppRouter.shared.pendingAction) { _, action in open(action) }
     }
 
     // MARK: - Content
@@ -257,6 +259,27 @@ struct InventoryHomeView: View {
         case .barcodes: flow = .barcodes
         case .receipt: flow = .receipt
         case .manual: editor = .add(ItemDraft())
+        }
+    }
+
+    /// Opens what a Lock Screen button or shortcut asked for, in place of
+    /// anything already showing here.
+    private func open(_ action: LarderAction?) {
+        guard let action else { return }
+        AppRouter.shared.pendingAction = nil
+        editor = nil
+        useSomeItem = nil
+        recountItem = nil
+        isShowingFilters = false
+        switch action {
+        case .add: start(AddMethod(rawValue: defaultMethodRaw) ?? .default)
+        case .barcodes: flow = .barcodes
+        case .shelf: flow = .shelf
+        case .receipt: flow = .receipt
+        case .quickAdd: flow = .quickAdd
+        case .tossOut: flow = .tossOut
+        case .useUp: flow = .useUp
+        case .recipe: flow = .recipe
         }
     }
 

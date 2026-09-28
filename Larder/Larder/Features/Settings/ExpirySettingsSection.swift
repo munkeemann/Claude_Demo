@@ -24,7 +24,7 @@ struct AddingSettingsSection: View {
         } header: {
             Text("Adding items")
         } footer: {
-            Text("Hold + for the other ways to add. \((ExpiryEntryMode(rawValue: expiryModeRaw) ?? .estimate).summary) These are just for you.")
+            Text("Hold + for the other ways to add. \((ExpiryEntryMode(rawValue: expiryModeRaw) ?? .estimate).summary) These are just for you.\n\nTo scan from the Lock Screen, hold the Lock Screen, tap Customize, and swap a corner button for Larder. It's also in Control Center and for the Action button.")
         }
     }
 }

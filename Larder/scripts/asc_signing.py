@@ -5,8 +5,9 @@ Apple's cloud-managed signing can't provision apps that use iCloud when it's
 driven by an API key, so each TestFlight build signs manually instead:
 
   prepare         create an Apple Distribution certificate (from a fresh key)
-                  and an App Store profile for the bundle ID
-  export-options  write ExportOptions for manual signing with that profile
+                  and an App Store profile for the app and each extension
+                  (registering an extension's App ID the first time)
+  export-options  write ExportOptions for manual signing with those profiles
   wait            wait for App Store Connect to finish processing a build
   cleanup         delete the profile and revoke the certificate
 
@@ -105,12 +106,27 @@ def make_p12(key, certificate_der, password):
     return pkcs12.serialize_key_and_certificates(b"Larder CI", key, certificate, None, encryption)
 
 
-def bundle_id_resource(identifier):
+def bundle_id_resource(identifier, register_as=None):
+    """The App ID's API id. An extension's App ID is registered if it's
+    missing (it needs no capabilities); the app's must already exist, set
+    up with iCloud and push."""
     result = request("GET", "/bundleIds", query={"filter[identifier]": identifier, "limit": "200"})
     for item in result.get("data", []):
         if item["attributes"].get("identifier") == identifier:
             return item["id"]
-    raise SystemExit(f"No App ID {identifier} in this team. Register it under Certificates, Identifiers & Profiles.")
+    if register_as is None:
+        raise SystemExit(f"No App ID {identifier} in this team. Register it under Certificates, Identifiers & Profiles.")
+    try:
+        created = request("POST", "/bundleIds", {
+            "data": {"type": "bundleIds", "attributes": {"identifier": identifier, "name": register_as, "platform": "IOS"}},
+        })
+    except APIError as error:
+        raise SystemExit(
+            f"Couldn't register the App ID {identifier}: {describe(error)}. "
+            "Register it under Certificates, Identifiers & Profiles (no capabilities needed)."
+        )
+    print(f"Registered App ID {identifier}")
+    return created["data"]["id"]
 
 
 def prepare(args):
@@ -141,27 +157,35 @@ def prepare(args):
     with open(os.path.join(args.out, "p12-password"), "w") as handle:
         handle.write(password)
 
-    bundle_id = bundle_id_resource(args.bundle_id)
-    try:
-        profile = request("POST", "/profiles", {
-            "data": {
-                "type": "profiles",
-                "attributes": {"name": args.profile_name, "profileType": "IOS_APP_STORE"},
-                "relationships": {
-                    "bundleId": {"data": {"type": "bundleIds", "id": bundle_id}},
-                    "certificates": {"data": [{"type": "certificates", "id": certificate["id"]}]},
+    targets = [(args.bundle_id, None, args.profile_name)]
+    for identifier in args.extension_bundle_id or []:
+        suffix = identifier.rsplit(".", 1)[-1]
+        targets.append((identifier, f"Larder {suffix}", f"{args.profile_name} {suffix}"))
+
+    state["profiles"] = []
+    profiles_dir = os.path.join(args.out, "profiles")
+    os.makedirs(profiles_dir, exist_ok=True)
+    for identifier, register_as, name in targets:
+        bundle_id = bundle_id_resource(identifier, register_as)
+        try:
+            profile = request("POST", "/profiles", {
+                "data": {
+                    "type": "profiles",
+                    "attributes": {"name": name, "profileType": "IOS_APP_STORE"},
+                    "relationships": {
+                        "bundleId": {"data": {"type": "bundleIds", "id": bundle_id}},
+                        "certificates": {"data": [{"type": "certificates", "id": certificate["id"]}]},
+                    },
                 },
-            },
-        })["data"]
-    except APIError as error:
-        raise SystemExit(f"Couldn't create an App Store profile: {describe(error)}")
-    state["profileId"] = profile["id"]
-    state["profileUuid"] = profile["attributes"]["uuid"]
-    state["profileName"] = profile["attributes"]["name"]
-    save()
-    with open(os.path.join(args.out, "profile.mobileprovision"), "wb") as handle:
-        handle.write(base64.b64decode(profile["attributes"]["profileContent"]))
-    print(f"Created profile {state['profileName']} ({state['profileUuid']})")
+            })["data"]
+        except APIError as error:
+            raise SystemExit(f"Couldn't create an App Store profile for {identifier}: {describe(error)}")
+        uuid = profile["attributes"]["uuid"]
+        state["profiles"].append({"bundleId": identifier, "id": profile["id"], "uuid": uuid, "name": name})
+        save()
+        with open(os.path.join(profiles_dir, f"{uuid}.mobileprovision"), "wb") as handle:
+            handle.write(base64.b64decode(profile["attributes"]["profileContent"]))
+        print(f"Created profile {name} ({uuid}) for {identifier}")
 
 
 # MARK: - export-options
@@ -175,7 +199,7 @@ def export_options(args):
         "teamID": args.team_id,
         "signingStyle": "manual",
         "signingCertificate": "Apple Distribution",
-        "provisioningProfiles": {args.bundle_id: state["profileUuid"]},
+        "provisioningProfiles": {profile["bundleId"]: profile["uuid"] for profile in state["profiles"]},
         "uploadSymbols": True,
         "manageAppVersionAndBuildNumber": False,
     }
@@ -216,10 +240,10 @@ def cleanup(args):
     with open(args.state) as handle:
         state = json.load(handle)
     failures = []
-    for kind, path in (("profile", "profileId"), ("certificate", "certificateId")):
-        resource = state.get(path)
-        if not resource:
-            continue
+    resources = [("profile", profile["id"]) for profile in state.get("profiles", [])]
+    if state.get("certificateId"):
+        resources.append(("certificate", state["certificateId"]))
+    for kind, resource in resources:
         try:
             request("DELETE", f"/{kind}s/{resource}")
             print(f"{'Revoked' if kind == 'certificate' else 'Deleted'} temporary {kind} {resource}")
@@ -237,7 +261,8 @@ def main():
 
     p = commands.add_parser("prepare")
     p.add_argument("--out", required=True)
-    p.add_argument("--bundle-id", required=True)
+    p.add_argument("--bundle-id", required=True, help="the app's bundle ID")
+    p.add_argument("--extension-bundle-id", action="append", help="an embedded extension's bundle ID (repeatable)")
     p.add_argument("--profile-name", required=True)
     p.set_defaults(run=prepare)
 
@@ -245,7 +270,6 @@ def main():
     p.add_argument("--state", required=True)
     p.add_argument("--destination", choices=["export", "upload"], required=True)
     p.add_argument("--team-id", required=True)
-    p.add_argument("--bundle-id", required=True)
     p.add_argument("--out", required=True)
     p.set_defaults(run=export_options)
 

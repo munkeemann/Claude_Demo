@@ -26,6 +26,14 @@ final class AppRouter {
     /// Items a "Find a recipe" reminder asked about; Recipes suggests
     /// dishes that use them, then clears this.
     var recipeFocusItemIDs: [UUID]?
+    /// A flow a Lock Screen button or shortcut asked for; Inventory opens
+    /// it, then clears this.
+    var pendingAction: LarderAction?
+
+    func open(_ action: LarderAction) {
+        selectedTab = .inventory
+        pendingAction = action
+    }
 }
 
 /// Handles notification taps and actions. iOS delivers these to a delegate
